@@ -1,25 +1,24 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
-// #include <stdlib.h>		// exit(), rand(), malloc()
-#include <string.h>		// strcmp(), strcpy(), strlen()
-#include <stdint.h>
-#include <stdbool.h>
-#include <wchar.h>
+// #include <stdlib.h>
+// #include <string.h>
+// #include <stdint.h>
+// #include <stdbool.h>
+// #include <wchar.h>
 
 #include "shakychat.h"
 
 static HWND mainHwnd;
 static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
+static struct Node *head = NULL;
 
+//TODO load history into linked list
+//TODO make window sizeable
 //TODO cmdline to set as client & ip
 //TODO cmdline to set as server & ip
-//TODO make window sizeable
-//TODO save chat log?
 //TODO make it encrypted?
-//TODO do all strings as wchar_t
-
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -58,7 +57,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.1",
+		"ShakyChat v0.2",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -70,22 +69,16 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	}
 
 	readSettings(INI_FILE, mainHwnd);
-	ShowWindow(mainHwnd, nShowCmd);
-	UpdateWindow(mainHwnd);
 
-	// while (1)
-	// {
-		while (GetMessage(&msg, NULL, 0, 0))
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		if (!IsDialogMessage(mainHwnd, &msg))
 		{
-			if (!IsDialogMessage(mainHwnd, &msg))
-			{
-				TranslateMessage(&msg);
-				DispatchMessage(&msg);
-			}
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
 		}
-	// }
+	}
 
-	// return (int)msg.wParam;
 	return EXIT_SUCCESS;
 }
 
@@ -98,7 +91,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case WM_CREATE:
 			// listbox
 			lbList = CreateWindowEx(WS_EX_LEFT, "ListBox", NULL,
-				WS_VISIBLE | WS_CHILD | LBS_DISABLENOSCROLL | LBS_NOSEL,
+				WS_VISIBLE | WS_CHILD | LBS_DISABLENOSCROLL | LBS_NOSEL | WS_BORDER | WS_VSCROLL,
 				10, 10, 560, 300, hwnd, (HMENU)ID_MAIN_LISTBOX, NULL, NULL);
 			originalListboxProc = (WNDPROC)SetWindowLongPtr(lbList, GWLP_WNDPROC, (LONG_PTR)customListboxProc);
 
@@ -108,6 +101,9 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				10, 310, 560, 25, hwnd, (HMENU)ID_MAIN_TEXTBOX, NULL, NULL);
 			originalTextProc = (WNDPROC)SetWindowLongPtr(eText, GWLP_WNDPROC, (LONG_PTR)customTextProc);
 
+			fillListbox(HISTORY_FILE, lbList);
+			readHistory(HISTORY_FILE);
+			printList(head);
 			break;
 		case WM_COMMAND:
 			// if (LOWORD(wParam) == ID_MAIN_QUIT)
@@ -121,8 +117,8 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				writeFile(LOG_FILE, "listbox clicked");
 
 				// a row was selected
-				if (HIWORD(wParam) == LBN_SELCHANGE)
-				{
+				// if (HIWORD(wParam) == LBN_SELCHANGE)
+				// {
 					// get row index
 					// state.selectedRow = SendMessage(lbList, LB_GETCURSEL, 0, 0);
 
@@ -131,17 +127,17 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 						// EnableWindow(bEdit, TRUE);
 						// EnableWindow(bDelete, TRUE);
 					// }
-				}
+				// }
 
 				// a row was double-clicked
-				if (HIWORD(wParam) == LBN_DBLCLK)
-				{
+				// if (HIWORD(wParam) == LBN_DBLCLK)
+				// {
 					// get row index
 					// state.selectedRow = SendMessage(lbList, LB_GETCURSEL, 0, 0);
 
 					// if (state.selectedRow != LB_ERR)
 					// 	editEntry();
-				}
+				// }
 			}
 			break;
 		case WM_SIZE:
@@ -155,14 +151,13 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					// shutDown(mainHwnd);
 					writeSettings(INI_FILE, hwnd);
+					PostQuitMessage(0);
 					break;
 			}
 			break;
 		case WM_DESTROY:
 			writeFile(LOG_FILE, "WM_DESTROY");
-			// shutDown(mainHwnd);
 			writeSettings(INI_FILE, hwnd);
 			PostQuitMessage(0);
 			break;
@@ -177,17 +172,16 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 		case WM_KEYUP:
 			switch (wParam)
 			{
-				case VK_RETURN:
+				// case VK_RETURN:
 					// get row index
 					// state.selectedRow = SendMessage(lbList, LB_GETCURSEL, 0, 0);
 
 					// if (state.selectedRow != LB_ERR)
 					// 	editEntry();
-					break;
+					// break;
 			}
 			break;
 	}
-
 	return CallWindowProc(originalListboxProc, hwnd, msg, wParam, lParam);
 }
 
@@ -199,10 +193,10 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					// DestroyWindow(addHwnd);
+					//
 					break;
-				case VK_RETURN: // catch Enter and send a Tab
-					// sendTab();
+				case VK_RETURN:
+					//
 					break;
 				case 'A': // CTRL A
 					if (GetAsyncKeyState(VK_CONTROL))
@@ -211,17 +205,16 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			}
 			break;
 	}
-
 	return CallWindowProc(originalTextProc, hwnd, msg, wParam, lParam);
 }
 
-void clearArray(char *array, int length)
+static void clearArray(char *array, int length)
 {
 	for (int i = 0; i < length; ++i)
 		array[i] = '\0';
 }
 
-void writeFile(char *f, char *s)
+static void writeFile(char *f, char *s)
 {
 	FILE *lf = fopen(f, "a");
 	if (lf == NULL)
@@ -234,7 +227,7 @@ void writeFile(char *f, char *s)
 	fclose(lf);
 }
 
-void writeFileW(char *f, wchar_t *s)
+static void writeFileW(char *f, wchar_t *s)
 {
 	FILE *lf = fopen(f, "a");
 	if (lf == NULL)
@@ -247,7 +240,7 @@ void writeFileW(char *f, wchar_t *s)
 	fclose(lf);
 }
 
-void writeSettings(char *iniFile, HWND hwnd)
+static void writeSettings(char *iniFile, HWND hwnd)
 {
 	FILE *f = fopen(iniFile, "w");
 	if (f == NULL)
@@ -274,13 +267,14 @@ void writeSettings(char *iniFile, HWND hwnd)
 	fclose(f);
 }
 
-void readSettings(char *iniFile, HWND hwnd)
+static void readSettings(char *iniFile, HWND hwnd)
 {
-	//TODO when file is missing apply centre position
-
 	FILE *f = fopen(iniFile, "r");
 	if (f == NULL)
 	{
+		int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+		int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+		SetWindowPos(hwnd, HWND_TOP, (screenWidth - WINDOW_WIDTH) / 2, (screenHeight - WINDOW_HEIGHT) / 2, WINDOW_WIDTH, WINDOW_HEIGHT, SWP_SHOWWINDOW);
 		return;
 	}
 
@@ -344,4 +338,84 @@ void readSettings(char *iniFile, HWND hwnd)
 	writeFile(LOG_FILE, buf);
 
 	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, windowWidth, windowHeight, SWP_SHOWWINDOW);
+}
+
+static void fillListbox(char *historyFile, HWND hwnd)
+{
+	FILE *f = fopen(historyFile, "r");
+	if (f == NULL)
+	{
+		writeFile(LOG_FILE, "No history found");
+		return;
+	}
+
+	char line[MAX_LINE];
+	int count = 0;
+
+	while (fgets(line, MAX_LINE, f) != NULL)
+		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)line);
+
+	fclose(f);
+}
+
+// static void push(struct Node **head_ref, char *text)
+// {
+// 	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
+// 	newNode->text = text;
+// 	newNode->next = (*head_ref);
+// 	(*head_ref) = newNode;
+// }
+
+static void append(struct Node **head_ref, char *text)
+{
+	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
+	newNode->text = text;
+	newNode->next = NULL;
+
+	// if list is empty make newNode into head
+	if (*head_ref == NULL)
+	{
+		*head_ref = newNode;
+		return;
+	}
+
+	struct Node *last = *head_ref;
+	while (last->next != NULL)
+		last = last->next;
+
+	last->next = newNode;
+}
+
+static void readHistory(char *historyFile)
+{
+	FILE *f = fopen(historyFile, "r");
+	if (f == NULL)
+	{
+		writeFile(LOG_FILE, "No history found");
+		return;
+	}
+
+	char line[MAX_LINE];
+
+	while (fgets(line, MAX_LINE, f) != NULL)
+	{
+		char buf[MAX_LINE];
+		sprintf(buf, "Read line %s", line);
+		writeFile(LOG_FILE, buf);
+
+		append(&head, line);
+	}
+
+	fclose(f);
+}
+
+static void printList(struct Node *node)
+{
+	while (node != NULL)
+	{
+		char buf[MAX_LINE];
+		sprintf(buf, "Node %s", node->text);
+		writeFile(LOG_FILE, buf);
+		node = node->next;
+	}
 }
