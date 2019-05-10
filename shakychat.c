@@ -14,7 +14,7 @@ static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
 static struct Node *head = NULL;
 
-//TODO load history into linked list
+//TODO load history into linked list, INPROG, re-work functions
 //TODO make window sizeable
 //TODO cmdline to set as client & ip
 //TODO cmdline to set as server & ip
@@ -101,9 +101,9 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				10, 310, 560, 25, hwnd, (HMENU)ID_MAIN_TEXTBOX, NULL, NULL);
 			originalTextProc = (WNDPROC)SetWindowLongPtr(eText, GWLP_WNDPROC, (LONG_PTR)customTextProc);
 
-			fillListbox(HISTORY_FILE, lbList);
 			readHistory(HISTORY_FILE);
-			printList(head);
+			fillListbox(HISTORY_FILE, lbList);
+			// printList(head);
 			break;
 		case WM_COMMAND:
 			// if (LOWORD(wParam) == ID_MAIN_QUIT)
@@ -342,35 +342,36 @@ static void readSettings(char *iniFile, HWND hwnd)
 
 static void fillListbox(char *historyFile, HWND hwnd)
 {
-	FILE *f = fopen(historyFile, "r");
-	if (f == NULL)
-	{
-		writeFile(LOG_FILE, "No history found");
-		return;
-	}
+	// FILE *f = fopen(historyFile, "r");
+	// if (f == NULL)
+	// {
+	// 	writeFile(LOG_FILE, "No history found");
+	// 	return;
+	// }
 
-	char line[MAX_LINE];
+	// char line[MAX_LINE];
 	int count = 0;
 
-	while (fgets(line, MAX_LINE, f) != NULL)
-		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)line);
+	// while (fgets(line, MAX_LINE, f) != NULL)
+	// 	SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)line);
 
-	fclose(f);
+	// fclose(f);
+
+	struct Node *n = head;
+	while (n != NULL)
+	{
+		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)n->text);
+		n = n->next;
+	}
+
 }
-
-// static void push(struct Node **head_ref, char *text)
-// {
-// 	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
-// 	newNode->text = text;
-// 	newNode->next = (*head_ref);
-// 	(*head_ref) = newNode;
-// }
 
 static void append(struct Node **head_ref, char *text)
 {
 	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
-	newNode->text = text;
+	// newNode->text = text;
 	newNode->next = NULL;
+	strcpy(newNode->text, text);
 
 	// if list is empty make newNode into head
 	if (*head_ref == NULL)
@@ -398,24 +399,18 @@ static void readHistory(char *historyFile)
 	char line[MAX_LINE];
 
 	while (fgets(line, MAX_LINE, f) != NULL)
-	{
-		char buf[MAX_LINE];
-		sprintf(buf, "Read line %s", line);
-		writeFile(LOG_FILE, buf);
-
 		append(&head, line);
-	}
 
 	fclose(f);
 }
 
-static void printList(struct Node *node)
-{
-	while (node != NULL)
-	{
-		char buf[MAX_LINE];
-		sprintf(buf, "Node %s", node->text);
-		writeFile(LOG_FILE, buf);
-		node = node->next;
-	}
-}
+// static void printList(struct Node *n)
+// {
+// 	while (n != NULL)
+// 	{
+// 		char buf[MAX_LINE];
+// 		sprintf(buf, "Node %s", n->text);
+// 		writeFile(LOG_FILE, buf);
+// 		n = n->next;
+// 	}
+// }

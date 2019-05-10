@@ -22,7 +22,7 @@ void fillListbox(char *, HWND);
 // void push(struct Node **, char *);
 void append(struct Node **, char *);
 void readHistory(char *);
-void printList(struct Node *);
+// void printList(struct Node *);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
@@ -30,6 +30,6 @@ LRESULT CALLBACK customTextProc(HWND, UINT, WPARAM, LPARAM);
 
 struct Node
 {
-	char *text;
+	char text[MAX_LINE];
 	struct Node *next;
 };
