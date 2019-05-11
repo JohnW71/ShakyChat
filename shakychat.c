@@ -14,11 +14,10 @@ static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
 static struct Node *head = NULL;
 
-//TODO load history into linked list, INPROG, re-work functions
 //TODO make window sizeable
 //TODO cmdline to set as client & ip
 //TODO cmdline to set as server & ip
-//TODO make it encrypted?
+//TODO encrypt log?
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -57,7 +56,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.2",
+		"ShakyChat v0.3",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -103,7 +102,6 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			readHistory(HISTORY_FILE);
 			fillListbox(HISTORY_FILE, lbList);
-			// printList(head);
 			break;
 		case WM_COMMAND:
 			// if (LOWORD(wParam) == ID_MAIN_QUIT)
@@ -170,15 +168,13 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 	switch (msg)
 	{
 		case WM_KEYUP:
+			writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
-				// case VK_RETURN:
-					// get row index
-					// state.selectedRow = SendMessage(lbList, LB_GETCURSEL, 0, 0);
-
-					// if (state.selectedRow != LB_ERR)
-					// 	editEntry();
-					// break;
+				case VK_ESCAPE:
+					writeSettings(INI_FILE, hwnd);
+					PostQuitMessage(0);
+					break;
 			}
 			break;
 	}
@@ -190,10 +186,12 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 	switch (msg)
 	{
 		case WM_KEYUP:
+			writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					//
+					writeSettings(INI_FILE, hwnd);
+					PostQuitMessage(0);
 					break;
 				case VK_RETURN:
 					//
@@ -317,10 +315,6 @@ static void readSettings(char *iniFile, HWND hwnd)
 
 	fclose(f);
 
-	char buf[100];
-	sprintf(buf, "read windowWidth=%d\nread windowHeight=%d\nread windowCol=%d\nread windowRow=%d", windowWidth, windowHeight, windowCol, windowRow);
-	writeFile(LOG_FILE, buf);
-
 	if (windowWidth == 0)	windowWidth = WINDOW_WIDTH;
 	if (windowHeight == 0)	windowHeight = WINDOW_HEIGHT;
 	if (windowRow == 0)
@@ -334,43 +328,25 @@ static void readSettings(char *iniFile, HWND hwnd)
 		windowCol = (screenWidth - windowWidth) / 2;
 	}
 
-	sprintf(buf, "updated windowWidth=%d\nupdated windowHeight=%d\nupdated windowCol=%d\nupdated windowRow=%d", windowWidth, windowHeight, windowCol, windowRow);
-	writeFile(LOG_FILE, buf);
-
 	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, windowWidth, windowHeight, SWP_SHOWWINDOW);
 }
 
 static void fillListbox(char *historyFile, HWND hwnd)
 {
-	// FILE *f = fopen(historyFile, "r");
-	// if (f == NULL)
-	// {
-	// 	writeFile(LOG_FILE, "No history found");
-	// 	return;
-	// }
-
-	// char line[MAX_LINE];
 	int count = 0;
-
-	// while (fgets(line, MAX_LINE, f) != NULL)
-	// 	SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)line);
-
-	// fclose(f);
-
-	struct Node *n = head;
-	while (n != NULL)
+	struct Node *node = head;
+	while (node != NULL)
 	{
-		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)n->text);
-		n = n->next;
+		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)node->text);
+		node = node->next;
 	}
-
 }
 
-static void append(struct Node **head_ref, char *text)
+static void append(struct Node **head_ref, char *text, size_t length)
 {
 	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
-	// newNode->text = text;
 	newNode->next = NULL;
+	newNode->text = malloc(length);
 	strcpy(newNode->text, text);
 
 	// if list is empty make newNode into head
@@ -397,9 +373,11 @@ static void readHistory(char *historyFile)
 	}
 
 	char line[MAX_LINE];
-
 	while (fgets(line, MAX_LINE, f) != NULL)
-		append(&head, line);
+	{
+		size_t length = strlen(line);
+		append(&head, line, length);
+	}
 
 	fclose(f);
 }
