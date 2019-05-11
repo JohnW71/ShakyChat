@@ -1,20 +1,16 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <stdint.h>
-// #include <stdbool.h>
-// #include <wchar.h>
 
 #include "shakychat.h"
 
 static HWND mainHwnd;
+static HWND listboxHwnd;
 static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
 static struct Node *head = NULL;
 
-//TODO make window sizeable
+//TODO prevent sizing too small
 //TODO cmdline to set as client & ip
 //TODO cmdline to set as server & ip
 //TODO encrypt log?
@@ -26,11 +22,11 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	WNDCLASSEX wc = {0};
 
 	// reset log file
-	FILE *lf = fopen(LOG_FILE, "w");
-	if (lf == NULL)
+	FILE *f = fopen(LOG_FILE, "w");
+	if (f == NULL)
 		MessageBox(NULL, "Can't open log file", "Error", MB_ICONEXCLAMATION | MB_OK);
 	else
-		fclose(lf);
+		fclose(f);
 
 	writeFile(LOG_FILE, "Command line:-");
 	writeFileW(LOG_FILE, lpCmdLine);
@@ -83,42 +79,43 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	HWND lbList, eText;
+	static HWND textboxHwnd;
 
 	switch (msg)
 	{
 		case WM_CREATE:
 			// listbox
-			lbList = CreateWindowEx(WS_EX_LEFT, "ListBox", NULL,
+			listboxHwnd = CreateWindowEx(WS_EX_LEFT, "ListBox", NULL,
 				WS_VISIBLE | WS_CHILD | LBS_DISABLENOSCROLL | LBS_NOSEL | WS_BORDER | WS_VSCROLL,
 				10, 10, 560, 300, hwnd, (HMENU)ID_MAIN_LISTBOX, NULL, NULL);
-			originalListboxProc = (WNDPROC)SetWindowLongPtr(lbList, GWLP_WNDPROC, (LONG_PTR)customListboxProc);
+			originalListboxProc = (WNDPROC)SetWindowLongPtr(listboxHwnd, GWLP_WNDPROC, (LONG_PTR)customListboxProc);
 
 			// textbox
-			eText = CreateWindowEx(WS_EX_LEFT, "Edit", "",
+			textboxHwnd = CreateWindowEx(WS_EX_LEFT, "Edit", "",
 				WS_VISIBLE | WS_CHILD | WS_BORDER | WS_TABSTOP,
 				10, 310, 560, 25, hwnd, (HMENU)ID_MAIN_TEXTBOX, NULL, NULL);
-			originalTextProc = (WNDPROC)SetWindowLongPtr(eText, GWLP_WNDPROC, (LONG_PTR)customTextProc);
+			originalTextProc = (WNDPROC)SetWindowLongPtr(textboxHwnd, GWLP_WNDPROC, (LONG_PTR)customTextProc);
 
+			SetFocus(textboxHwnd);
 			readHistory(HISTORY_FILE);
-			fillListbox(HISTORY_FILE, lbList);
+			fillListbox(HISTORY_FILE, listboxHwnd);
 			break;
-		case WM_COMMAND:
+		// case WM_COMMAND:
 			// if (LOWORD(wParam) == ID_MAIN_QUIT)
 			// {
 			// 	// shutDown(mainHwnd);
 			// 	writeSettings(INI_FILE);
 			// }
 
-			if (LOWORD(wParam) == ID_MAIN_LISTBOX)
-			{
-				writeFile(LOG_FILE, "listbox clicked");
+			// if (LOWORD(wParam) == ID_MAIN_LISTBOX)
+			// {
+			// 	writeFile(LOG_FILE, "listbox clicked");
 
 				// a row was selected
 				// if (HIWORD(wParam) == LBN_SELCHANGE)
 				// {
 					// get row index
-					// state.selectedRow = SendMessage(lbList, LB_GETCURSEL, 0, 0);
+					// state.selectedRow = SendMessage(listboxHwnd, LB_GETCURSEL, 0, 0);
 
 					// if (state.selectedRow != LB_ERR)
 					// {
@@ -131,25 +128,29 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				// if (HIWORD(wParam) == LBN_DBLCLK)
 				// {
 					// get row index
-					// state.selectedRow = SendMessage(lbList, LB_GETCURSEL, 0, 0);
+					// state.selectedRow = SendMessage(listboxHwnd, LB_GETCURSEL, 0, 0);
 
 					// if (state.selectedRow != LB_ERR)
 					// 	editEntry();
 				// }
-			}
-			break;
+			// }
+			// break;
 		case WM_SIZE:
-			writeFile(LOG_FILE, "WM_SIZE");
-			break;
-		case WM_SIZING:
-			writeFile(LOG_FILE, "WM_SIZING");
+			RECT rc = {0};
+			GetWindowRect(hwnd, &rc);
+			int windowWidth = rc.right - rc.left;
+			int windowHeight = rc.bottom - rc.top;
+			SetWindowPos(listboxHwnd, HWND_TOP, 10, 10, windowWidth-40, windowHeight-90, SWP_SHOWWINDOW);
+			SetWindowPos(textboxHwnd, HWND_TOP, 10, windowHeight-75, windowWidth-40, 25, SWP_SHOWWINDOW);
 			break;
 		case WM_KEYUP:
-			writeFile(LOG_FILE, "WM_KEYUP");
+			// writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
+					writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, hwnd);
+					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
 					break;
 			}
@@ -157,6 +158,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case WM_DESTROY:
 			writeFile(LOG_FILE, "WM_DESTROY");
 			writeSettings(INI_FILE, hwnd);
+			writeHistory(HISTORY_FILE);
 			PostQuitMessage(0);
 			break;
 	}
@@ -168,11 +170,13 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 	switch (msg)
 	{
 		case WM_KEYUP:
-			writeFile(LOG_FILE, "WM_KEYUP");
+			// writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
+					writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, hwnd);
+					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
 					break;
 			}
@@ -186,15 +190,24 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 	switch (msg)
 	{
 		case WM_KEYUP:
-			writeFile(LOG_FILE, "WM_KEYUP");
+			// writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
+					writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, hwnd);
+					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
 					break;
 				case VK_RETURN:
-					//
+					char text[MAX_LINE];
+					GetWindowText(hwnd, text, MAX_LINE);
+					if (strlen(text) > 0)
+					{
+						append(&head, text, strlen(text));
+						SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
+						SetWindowText(hwnd, "");
+					}
 					break;
 				case 'A': // CTRL A
 					if (GetAsyncKeyState(VK_CONTROL))
@@ -212,30 +225,30 @@ static void clearArray(char *array, int length)
 		array[i] = '\0';
 }
 
-static void writeFile(char *f, char *s)
+static void writeFile(char *filename, char *text)
 {
-	FILE *lf = fopen(f, "a");
-	if (lf == NULL)
+	FILE *f = fopen(filename, "a");
+	if (f == NULL)
 	{
 		MessageBox(NULL, "Can't open file", "Error", MB_ICONEXCLAMATION | MB_OK);
 		return;
 	}
 
-	fprintf(lf, "%s\n", s);
-	fclose(lf);
+	fprintf(f, "%s\n", text);
+	fclose(f);
 }
 
-static void writeFileW(char *f, wchar_t *s)
+static void writeFileW(char *filename, wchar_t *text)
 {
-	FILE *lf = fopen(f, "a");
-	if (lf == NULL)
+	FILE *f = fopen(filename, "a");
+	if (f == NULL)
 	{
 		MessageBox(NULL, "Can't open file", "Error", MB_ICONEXCLAMATION | MB_OK);
 		return;
 	}
 
-	fwprintf(lf, L"%ls\n", s);
-	fclose(lf);
+	fwprintf(f, L"%ls\n", text);
+	fclose(f);
 }
 
 static void writeSettings(char *iniFile, HWND hwnd)
@@ -328,6 +341,10 @@ static void readSettings(char *iniFile, HWND hwnd)
 		windowCol = (screenWidth - windowWidth) / 2;
 	}
 
+	// catch flattened window
+	if (windowHeight < 100)
+		windowHeight = 400;
+
 	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, windowWidth, windowHeight, SWP_SHOWWINDOW);
 }
 
@@ -363,6 +380,22 @@ static void append(struct Node **head_ref, char *text, size_t length)
 	last->next = newNode;
 }
 
+static void deleteHead()
+{
+	if (head == NULL)
+	{
+		writeFile(LOG_FILE, "Null head");
+		return;
+	}
+
+	// store current head node
+	struct Node *previous = head;
+	// move head to next node
+	head = previous->next;
+	free(previous->text);
+	free(previous);
+}
+
 static void readHistory(char *historyFile)
 {
 	FILE *f = fopen(historyFile, "r");
@@ -382,13 +415,21 @@ static void readHistory(char *historyFile)
 	fclose(f);
 }
 
-// static void printList(struct Node *n)
-// {
-// 	while (n != NULL)
-// 	{
-// 		char buf[MAX_LINE];
-// 		sprintf(buf, "Node %s", n->text);
-// 		writeFile(LOG_FILE, buf);
-// 		n = n->next;
-// 	}
-// }
+static void writeHistory(char *historyFile)
+{
+	FILE *f = fopen(historyFile, "w");
+	if (f == NULL)
+	{
+		MessageBox(NULL, "Can't write history file", "Error", MB_ICONEXCLAMATION | MB_OK);
+		return;
+	}
+
+	struct Node *node = head;
+	while (node != NULL)
+	{
+		fprintf(f, "%s", node->text);
+		node = node->next;
+	}
+
+	fclose(f);
+}
