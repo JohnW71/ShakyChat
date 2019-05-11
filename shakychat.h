@@ -19,8 +19,7 @@ void writeFileW(char *, wchar_t *);
 void readSettings(char *, HWND);
 void writeSettings(char *, HWND);
 void fillListbox(char *, HWND);
-// void push(struct Node **, char *);
-void append(struct Node **, char *);
+void append(struct Node **, char *, size_t);
 void readHistory(char *);
 // void printList(struct Node *);
 
@@ -30,6 +29,6 @@ LRESULT CALLBACK customTextProc(HWND, UINT, WPARAM, LPARAM);
 
 struct Node
 {
-	char text[MAX_LINE];
+	char *text;
 	struct Node *next;
 };
