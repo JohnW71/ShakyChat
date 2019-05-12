@@ -10,7 +10,7 @@ static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
 static struct Node *head = NULL;
 
-//TODO prevent sizing too small
+//TODO limit row lengths properly and size window to fit it
 //TODO cmdline to set as client & ip
 //TODO cmdline to set as server & ip
 //TODO encrypt log?
@@ -138,10 +138,16 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case WM_SIZE:
 			RECT rc = {0};
 			GetWindowRect(hwnd, &rc);
-			int windowWidth = rc.right - rc.left;
 			int windowHeight = rc.bottom - rc.top;
-			SetWindowPos(listboxHwnd, HWND_TOP, 10, 10, windowWidth-40, windowHeight-90, SWP_SHOWWINDOW);
-			SetWindowPos(textboxHwnd, HWND_TOP, 10, windowHeight-75, windowWidth-40, 25, SWP_SHOWWINDOW);
+
+			// resize listbox & textbox to fit window
+			SetWindowPos(listboxHwnd, HWND_TOP, 10, 10, WINDOW_WIDTH-40, windowHeight-90, SWP_SHOWWINDOW);
+			SetWindowPos(textboxHwnd, HWND_TOP, 10, windowHeight-75, WINDOW_WIDTH-40, 25, SWP_SHOWWINDOW);
+			// maintain main window width
+			SetWindowPos(hwnd, HWND_TOP, rc.left, rc.top, WINDOW_WIDTH, windowHeight, SWP_SHOWWINDOW);
+			// set minimum height
+			if (windowHeight < 200)
+				SetWindowPos(hwnd, HWND_TOP, rc.left, rc.top, WINDOW_WIDTH, 200, SWP_SHOWWINDOW);
 			break;
 		case WM_KEYUP:
 			// writeFile(LOG_FILE, "WM_KEYUP");
@@ -175,7 +181,7 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 			{
 				case VK_ESCAPE:
 					writeFile(LOG_FILE, "VK_ESCAPE");
-					writeSettings(INI_FILE, hwnd);
+					writeSettings(INI_FILE, mainHwnd);
 					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
 					break;
@@ -195,7 +201,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			{
 				case VK_ESCAPE:
 					writeFile(LOG_FILE, "VK_ESCAPE");
-					writeSettings(INI_FILE, hwnd);
+					writeSettings(INI_FILE, mainHwnd);
 					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
 					break;
@@ -204,6 +210,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
 					{
+						strcat(text, "\n");
 						append(&head, text, strlen(text));
 						SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
 						SetWindowText(hwnd, "");
@@ -262,18 +269,16 @@ static void writeSettings(char *iniFile, HWND hwnd)
 
 	RECT rc = {0};
 	GetWindowRect(hwnd, &rc);
-	int windowWidth = rc.right - rc.left;
 	int windowHeight = rc.bottom - rc.top;
 	int windowCol = rc.left;
 	int windowRow = rc.top;
 
-	char buf[100];
-	sprintf(buf, "wrote windowWidth=%d\nwrote windowHeight=%d\nwrote windowCol=%d\nwrote windowRow=%d", windowWidth, windowHeight, windowCol, windowRow);
-	writeFile(LOG_FILE, buf);
+	// char buf[100];
+	// sprintf(buf, "wrote windowHeight=%d\nwrote windowCol=%d\nwrote windowRow=%d", windowHeight, windowCol, windowRow);
+	// writeFile(LOG_FILE, buf);
 
 	fprintf(f, "window_row=%d\n", windowRow);
 	fprintf(f, "window_col=%d\n", windowCol);
-	fprintf(f, "window_width=%d\n", windowWidth);
 	fprintf(f, "window_height=%d\n", windowHeight);
 	fclose(f);
 }
@@ -289,7 +294,6 @@ static void readSettings(char *iniFile, HWND hwnd)
 		return;
 	}
 
-	int windowWidth = 0;
 	int windowHeight = 0;
 	int windowCol = 0;
 	int windowRow = 0;
@@ -322,13 +326,11 @@ static void readSettings(char *iniFile, HWND hwnd)
 
 		if (strcmp(setting, "window_row") == 0)		windowRow = atoi(value);
 		if (strcmp(setting, "window_col") == 0)		windowCol = atoi(value);
-		if (strcmp(setting, "window_width") == 0)	windowWidth = atoi(value);
 		if (strcmp(setting, "window_height") == 0)	windowHeight = atoi(value);
 	}
 
 	fclose(f);
 
-	if (windowWidth == 0)	windowWidth = WINDOW_WIDTH;
 	if (windowHeight == 0)	windowHeight = WINDOW_HEIGHT;
 	if (windowRow == 0)
 	{
@@ -338,14 +340,10 @@ static void readSettings(char *iniFile, HWND hwnd)
 	if (windowCol == 0)
 	{
 	 	int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-		windowCol = (screenWidth - windowWidth) / 2;
+		windowCol = (screenWidth - WINDOW_WIDTH) / 2;
 	}
 
-	// catch flattened window
-	if (windowHeight < 100)
-		windowHeight = 400;
-
-	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, windowWidth, windowHeight, SWP_SHOWWINDOW);
+	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, WINDOW_WIDTH, windowHeight, SWP_SHOWWINDOW);
 }
 
 static void fillListbox(char *historyFile, HWND hwnd)
