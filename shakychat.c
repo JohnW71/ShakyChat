@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "shakychat.h"
 
@@ -9,11 +10,6 @@ static HWND listboxHwnd;
 static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
 static struct Node *head = NULL;
-
-//TODO limit row lengths properly and size window to fit it
-//TODO cmdline to set as client & ip
-//TODO cmdline to set as server & ip
-//TODO encrypt log?
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -80,61 +76,45 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static HWND textboxHwnd;
+	static bool scrolled = false;
 
 	switch (msg)
 	{
 		case WM_CREATE:
+			SetTimer(hwnd, ID_TIMER1, 100, NULL);
+
 			// listbox
 			listboxHwnd = CreateWindowEx(WS_EX_LEFT, "ListBox", NULL,
 				WS_VISIBLE | WS_CHILD | LBS_DISABLENOSCROLL | LBS_NOSEL | WS_BORDER | WS_VSCROLL,
-				10, 10, 560, 300, hwnd, (HMENU)ID_MAIN_LISTBOX, NULL, NULL);
+				10, 10, WINDOW_WIDTH-40, 300, hwnd, (HMENU)ID_MAIN_LISTBOX, NULL, NULL);
 			originalListboxProc = (WNDPROC)SetWindowLongPtr(listboxHwnd, GWLP_WNDPROC, (LONG_PTR)customListboxProc);
 
 			// textbox
 			textboxHwnd = CreateWindowEx(WS_EX_LEFT, "Edit", "",
 				WS_VISIBLE | WS_CHILD | WS_BORDER | WS_TABSTOP,
-				10, 310, 560, 25, hwnd, (HMENU)ID_MAIN_TEXTBOX, NULL, NULL);
+				10, 310, WINDOW_WIDTH-40, 25, hwnd, (HMENU)ID_MAIN_TEXTBOX, NULL, NULL);
 			originalTextProc = (WNDPROC)SetWindowLongPtr(textboxHwnd, GWLP_WNDPROC, (LONG_PTR)customTextProc);
 
-			SetFocus(textboxHwnd);
+			// populate listbox
 			readHistory(HISTORY_FILE);
 			fillListbox(HISTORY_FILE, listboxHwnd);
+
+			// limit text field length
+			SendMessage(textboxHwnd, EM_LIMITTEXT, MAX_LINE-2, 0);
+			SetFocus(textboxHwnd);
 			break;
-		// case WM_COMMAND:
-			// if (LOWORD(wParam) == ID_MAIN_QUIT)
-			// {
-			// 	// shutDown(mainHwnd);
-			// 	writeSettings(INI_FILE);
-			// }
-
-			// if (LOWORD(wParam) == ID_MAIN_LISTBOX)
-			// {
-			// 	writeFile(LOG_FILE, "listbox clicked");
-
-				// a row was selected
-				// if (HIWORD(wParam) == LBN_SELCHANGE)
-				// {
-					// get row index
-					// state.selectedRow = SendMessage(listboxHwnd, LB_GETCURSEL, 0, 0);
-
-					// if (state.selectedRow != LB_ERR)
-					// {
-						// EnableWindow(bEdit, TRUE);
-						// EnableWindow(bDelete, TRUE);
-					// }
-				// }
-
-				// a row was double-clicked
-				// if (HIWORD(wParam) == LBN_DBLCLK)
-				// {
-					// get row index
-					// state.selectedRow = SendMessage(listboxHwnd, LB_GETCURSEL, 0, 0);
-
-					// if (state.selectedRow != LB_ERR)
-					// 	editEntry();
-				// }
-			// }
-			// break;
+		case WM_TIMER:
+			if (wParam == ID_TIMER1)
+			{
+				// scroll to last row on startup, can't do this during WM_CREATE as listbox is not visible at that point
+				if (!scrolled)
+				{
+					scrolled = true;
+					SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
+					KillTimer(hwnd, ID_TIMER1);
+				}
+			}
+			break;
 		case WM_SIZE:
 			RECT rc = {0};
 			GetWindowRect(hwnd, &rc);
@@ -143,14 +123,15 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			// resize listbox & textbox to fit window
 			SetWindowPos(listboxHwnd, HWND_TOP, 10, 10, WINDOW_WIDTH-40, windowHeight-90, SWP_SHOWWINDOW);
 			SetWindowPos(textboxHwnd, HWND_TOP, 10, windowHeight-75, WINDOW_WIDTH-40, 25, SWP_SHOWWINDOW);
+
 			// maintain main window width
 			SetWindowPos(hwnd, HWND_TOP, rc.left, rc.top, WINDOW_WIDTH, windowHeight, SWP_SHOWWINDOW);
-			// set minimum height
-			if (windowHeight < 200)
-				SetWindowPos(hwnd, HWND_TOP, rc.left, rc.top, WINDOW_WIDTH, 200, SWP_SHOWWINDOW);
+
+			// force minimum height
+			if (windowHeight < WINDOW_HEIGHT_MINIMUM)
+				SetWindowPos(hwnd, HWND_TOP, rc.left, rc.top, WINDOW_WIDTH, WINDOW_HEIGHT_MINIMUM, SWP_SHOWWINDOW);
 			break;
 		case WM_KEYUP:
-			// writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
@@ -176,7 +157,6 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 	switch (msg)
 	{
 		case WM_KEYUP:
-			// writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
@@ -196,7 +176,6 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 	switch (msg)
 	{
 		case WM_KEYUP:
-			// writeFile(LOG_FILE, "WM_KEYUP");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
@@ -206,19 +185,37 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					PostQuitMessage(0);
 					break;
 				case VK_RETURN:
+					writeFile(LOG_FILE, "VK_RETURN");
 					char text[MAX_LINE];
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
 					{
+						// add text to linked list
 						strcat(text, "\n");
 						append(&head, text, strlen(text));
+
+						// add text to listbox
 						SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
+
+						// keep list size limited
+						LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
+						if (rowCount > HISTORY_LIMIT)
+						{
+							SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
+							deleteHead();
+						}
+
+						// scroll to last row
+						SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
 						SetWindowText(hwnd, "");
 					}
 					break;
 				case 'A': // CTRL A
 					if (GetAsyncKeyState(VK_CONTROL))
+					{
+						writeFile(LOG_FILE, "CTRL A");
 						SendMessage(hwnd, EM_SETSEL, 0, -1);
+					}
 					break;
 			}
 			break;
@@ -260,6 +257,7 @@ static void writeFileW(char *filename, wchar_t *text)
 
 static void writeSettings(char *iniFile, HWND hwnd)
 {
+	writeFile(LOG_FILE, "writeSettings()");
 	FILE *f = fopen(iniFile, "w");
 	if (f == NULL)
 	{
@@ -273,10 +271,6 @@ static void writeSettings(char *iniFile, HWND hwnd)
 	int windowCol = rc.left;
 	int windowRow = rc.top;
 
-	// char buf[100];
-	// sprintf(buf, "wrote windowHeight=%d\nwrote windowCol=%d\nwrote windowRow=%d", windowHeight, windowCol, windowRow);
-	// writeFile(LOG_FILE, buf);
-
 	fprintf(f, "window_row=%d\n", windowRow);
 	fprintf(f, "window_col=%d\n", windowCol);
 	fprintf(f, "window_height=%d\n", windowHeight);
@@ -285,6 +279,7 @@ static void writeSettings(char *iniFile, HWND hwnd)
 
 static void readSettings(char *iniFile, HWND hwnd)
 {
+	writeFile(LOG_FILE, "readSettings()");
 	FILE *f = fopen(iniFile, "r");
 	if (f == NULL)
 	{
@@ -348,6 +343,7 @@ static void readSettings(char *iniFile, HWND hwnd)
 
 static void fillListbox(char *historyFile, HWND hwnd)
 {
+	writeFile(LOG_FILE, "fillListbox()");
 	int count = 0;
 	struct Node *node = head;
 	while (node != NULL)
@@ -380,6 +376,7 @@ static void append(struct Node **head_ref, char *text, size_t length)
 
 static void deleteHead()
 {
+	writeFile(LOG_FILE, "deleteHead()");
 	if (head == NULL)
 	{
 		writeFile(LOG_FILE, "Null head");
@@ -388,6 +385,7 @@ static void deleteHead()
 
 	// store current head node
 	struct Node *previous = head;
+
 	// move head to next node
 	head = previous->next;
 	free(previous->text);
@@ -396,6 +394,7 @@ static void deleteHead()
 
 static void readHistory(char *historyFile)
 {
+	writeFile(LOG_FILE, "readHistory()");
 	FILE *f = fopen(historyFile, "r");
 	if (f == NULL)
 	{
@@ -415,6 +414,7 @@ static void readHistory(char *historyFile)
 
 static void writeHistory(char *historyFile)
 {
+	writeFile(LOG_FILE, "writeHistory()");
 	FILE *f = fopen(historyFile, "w");
 	if (f == NULL)
 	{

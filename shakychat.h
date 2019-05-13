@@ -2,13 +2,16 @@
 
 #define ID_MAIN_TEXTBOX 20
 #define ID_MAIN_LISTBOX 21
+#define ID_TIMER1 1
 
 #define INI_FILE "shakychat.ini"
-#define LOG_FILE "log.txt"
-#define HISTORY_FILE "history.txt"
-#define MAX_LINE 80
-#define WINDOW_WIDTH 600
+#define LOG_FILE "shakychat.log"
+#define HISTORY_FILE "shakychat.txt"
+#define HISTORY_LIMIT 20
+#define MAX_LINE 62
+#define WINDOW_WIDTH 570
 #define WINDOW_HEIGHT 400
+#define WINDOW_HEIGHT_MINIMUM 200
 
 #define assert(expression) if(!(expression)) {*(int *)0 = 0;}
 #define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
