@@ -18,7 +18,7 @@
 
 void clearArray(char *, int);
 void writeFile(char *, char *);
-void writeFileW(char *, wchar_t *);
+// void writeFileW(char *, wchar_t *);
 void readSettings(char *, HWND);
 void writeSettings(char *, HWND);
 void fillListbox(char *, HWND);
@@ -26,6 +26,7 @@ void append(struct Node **, char *, size_t);
 void deleteHead();
 void readHistory(char *);
 void writeHistory(char *);
+void parseCommandLine(LPWSTR);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
