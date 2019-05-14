@@ -10,6 +10,9 @@ static HWND listboxHwnd;
 static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
 static struct Node *head = NULL;
+static int port = 5150;
+static char ip[16];
+static bool server = true;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -23,9 +26,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		MessageBox(NULL, "Can't open log file", "Error", MB_ICONEXCLAMATION | MB_OK);
 	else
 		fclose(f);
-
-	writeFile(LOG_FILE, "Command line:-");
-	writeFileW(LOG_FILE, lpCmdLine);
 
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.cbClsExtra = 0;
@@ -48,7 +48,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.3",
+		"ShakyChat v0.4",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -59,6 +59,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		return EXIT_FAILURE;
 	}
 
+	parseCommandLine(lpCmdLine);
 	readSettings(INI_FILE, mainHwnd);
 
 	while (GetMessage(&msg, NULL, 0, 0))
@@ -242,18 +243,18 @@ static void writeFile(char *filename, char *text)
 	fclose(f);
 }
 
-static void writeFileW(char *filename, wchar_t *text)
-{
-	FILE *f = fopen(filename, "a");
-	if (f == NULL)
-	{
-		MessageBox(NULL, "Can't open file", "Error", MB_ICONEXCLAMATION | MB_OK);
-		return;
-	}
+// static void writeFileW(char *filename, wchar_t *text)
+// {
+// 	FILE *f = fopen(filename, "a");
+// 	if (f == NULL)
+// 	{
+// 		MessageBox(NULL, "Can't open file", "Error", MB_ICONEXCLAMATION | MB_OK);
+// 		return;
+// 	}
 
-	fwprintf(f, L"%ls\n", text);
-	fclose(f);
-}
+// 	fwprintf(f, L"%ls\n", text);
+// 	fclose(f);
+// }
 
 static void writeSettings(char *iniFile, HWND hwnd)
 {
@@ -430,4 +431,43 @@ static void writeHistory(char *historyFile)
 	}
 
 	fclose(f);
+}
+
+static void parseCommandLine(LPWSTR lpCmdLine)
+{
+	// temporary forced command line
+	wcscpy(lpCmdLine, L"123.123.123.123 5150");
+
+	if (wcslen(lpCmdLine) == 0)
+	{
+		writeFile(LOG_FILE, "Starting as server");
+		return;
+	}
+
+	writeFile(LOG_FILE, "Starting as client");
+	char commandLine[MAX_LINE];
+	wcstombs(commandLine, lpCmdLine, MAX_LINE);
+	char buf[MAX_LINE];
+	sprintf(buf, "Command line converted: %s", commandLine);
+	writeFile(LOG_FILE, buf);
+
+	// get ip address
+	int i = 0;
+	while (commandLine[i] != ' ')
+	{
+		ip[i] = commandLine[i];
+		++i;
+	}
+	ip[i++] = '\0';
+
+	// get port number
+	char portText[MAX_LINE];
+	clearArray(portText, MAX_LINE);
+	int p = 0;
+	while (commandLine[i] != '\0')
+		portText[p++] = commandLine[i++];
+	port = atoi(portText);
+
+	sprintf(buf, "IP: %s\nPort: %d", ip, port);
+	writeFile(LOG_FILE, buf);
 }
