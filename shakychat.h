@@ -16,24 +16,27 @@
 #define assert(expression) if(!(expression)) {*(int *)0 = 0;}
 #define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
 
-void clearArray(char *, int);
-void writeFile(char *, char *);
-// void writeFileW(char *, wchar_t *);
-void readSettings(char *, HWND);
-void writeSettings(char *, HWND);
-void fillListbox(char *, HWND);
-void append(struct Node **, char *, size_t);
-void deleteHead();
-void readHistory(char *);
-void writeHistory(char *);
-void parseCommandLine(LPWSTR);
-
-LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK customTextProc(HWND, UINT, WPARAM, LPARAM);
-
 struct Node
 {
 	char *text;
 	struct Node *next;
 };
+
+static void clearArray(char *, int);
+static void writeFile(char *, char *);
+// static void writeFileW(char *, wchar_t *);
+static void readSettings(char *, HWND);
+static void writeSettings(char *, HWND);
+static void fillListbox(char *, HWND);
+static void append(struct Node **, char *, size_t);
+static void deleteHead();
+static void readHistory(char *);
+static void writeHistory(char *);
+static void parseCommandLine(LPWSTR);
+static void server(PVOID);
+static void client(PVOID);
+static int recvTimeoutTCP(SOCKET, long, long);
+
+LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK customTextProc(HWND, UINT, WPARAM, LPARAM);
