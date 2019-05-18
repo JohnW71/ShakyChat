@@ -7,7 +7,7 @@
 #define INI_FILE "shakychat.ini"
 #define LOG_FILE "shakychat.log"
 #define HISTORY_FILE "shakychat.txt"
-#define HISTORY_LIMIT 20
+#define HISTORY_LIMIT 8
 #define MAX_LINE 62
 #define WINDOW_WIDTH 570
 #define WINDOW_HEIGHT 400
@@ -33,9 +33,14 @@ static void deleteHead();
 static void readHistory(char *);
 static void writeHistory(char *);
 static void parseCommandLine(LPWSTR);
-static void server(PVOID);
-static void client(PVOID);
-static int recvTimeoutTCP(SOCKET, long, long);
+static void serverConfig(PVOID);
+static void serverWaiting(PVOID);
+static void serverShutdown();
+static void clientConfig(PVOID);
+static void clientWaiting(PVOID);
+static void clientShutdown();
+// static int recvTimeoutTCP(SOCKET, long, long);
+static void wsaErrorText(char *, int);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
