@@ -40,7 +40,7 @@ static void clientConfig(PVOID);
 static void clientWaiting(PVOID);
 static void clientShutdown();
 // static int recvTimeoutTCP(SOCKET, long, long);
-static void wsaErrorText(char *, int);
+static void getWSAErrorText(char *, int);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
