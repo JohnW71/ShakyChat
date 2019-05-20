@@ -24,7 +24,6 @@ struct Node
 
 static void clearArray(char *, int);
 static void writeFile(char *, char *);
-// static void writeFileW(char *, wchar_t *);
 static void readSettings(char *, HWND);
 static void writeSettings(char *, HWND);
 static void fillListbox(char *, HWND);
@@ -39,7 +38,6 @@ static void serverShutdown();
 static void clientConfig(PVOID);
 static void clientWaiting(PVOID);
 static void clientShutdown();
-// static int recvTimeoutTCP(SOCKET, long, long);
 static void getWSAErrorText(char *, int);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
