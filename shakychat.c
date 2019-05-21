@@ -15,6 +15,10 @@ static HWND listboxHwnd;
 static HWND textboxHwnd;
 static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
+static SOCKADDR_IN serverAddr;
+static SOCKET listenSocket;
+static SOCKET serverSocket;
+static SOCKET clientSocket;
 static struct Node *head = NULL;
 static u_short port = 5150;
 static char ip[16];
@@ -23,10 +27,6 @@ static bool isServer = true;
 static bool serverConnected = false;
 static bool clientConnected = false;
 static bool serverWaitingThreadStarted = false;
-static SOCKADDR_IN serverAddr;
-static SOCKET listenSocket;
-static SOCKET serverSocket;
-static SOCKET clientSocket;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -62,7 +62,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.6",
+		"ShakyChat v0.61",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -133,7 +133,6 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					_beginthread(serverConfig, 0, NULL);
 				else
 					_beginthread(clientConfig, 0, NULL);
-writeFile(LOG_FILE, "after server/client");
 			}
 			break;
 		case WM_COMMAND:
@@ -162,7 +161,7 @@ writeFile(LOG_FILE, "after server/client");
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					writeFile(LOG_FILE, "VK_ESCAPE");
+					// writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, hwnd);
 					writeHistory(HISTORY_FILE);
 					if (isServer)
@@ -174,7 +173,7 @@ writeFile(LOG_FILE, "after server/client");
 			}
 			break;
 		case WM_DESTROY:
-			writeFile(LOG_FILE, "WM_DESTROY");
+			// writeFile(LOG_FILE, "WM_DESTROY");
 			writeSettings(INI_FILE, hwnd);
 			writeHistory(HISTORY_FILE);
 			if (isServer)
@@ -195,7 +194,7 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					writeFile(LOG_FILE, "VK_ESCAPE");
+					// writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, mainHwnd);
 					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
@@ -214,41 +213,24 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					writeFile(LOG_FILE, "VK_ESCAPE");
+					// writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, mainHwnd);
 					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
 					break;
 				case VK_RETURN:
-					writeFile(LOG_FILE, "VK_RETURN");
+					// writeFile(LOG_FILE, "VK_RETURN");
 					char text[MAX_LINE];
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
 					{
-						// add text to linked list
-						strcat(text, "\n");
-						append(&head, text, strlen(text));
-
-						// add text to listbox
-						SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
-
-						// keep list size limited
-						LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
-						if (rowCount > HISTORY_LIMIT)
-						{
-							SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
-							deleteHead();
-						}
-
-						// scroll to last row
-						SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
-						SetWindowText(hwnd, "");
+						addNewText(text, strlen(text));
 
 						// transmit message
-						// if (serverConnected && clientConnected)
-						// {
-							char buf[MAX_LINE] = "\0";
-							if (isServer) // send data to client
+						char buf[MAX_LINE] = "\0";
+						if (isServer)
+						{
+							if (serverConnected) // send data to client
 							{
 								int bytesSent = send(serverSocket, text, (int)strlen(text), 0);
 
@@ -264,7 +246,15 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 									writeFile(LOG_FILE, buf);
 								}
 							}
-							else // send data to server
+							else
+							{
+								strcpy(text, "#Server not connected!");
+								addNewText(text, strlen(text));
+							}
+						}
+						else
+						{
+							if (clientConnected) // send data to server
 							{
 								int bytesSent = send(clientSocket, text, (int)strlen(text), 0);
 
@@ -280,13 +270,18 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 									writeFile(LOG_FILE, buf);
 								}
 							}
-						// }
+							else
+							{
+								strcpy(text, "#Client not connected!");
+								addNewText(text, strlen(text));
+							}
+						}
 					}
 					break;
 				case 'A': // CTRL A
 					if (GetAsyncKeyState(VK_CONTROL))
 					{
-						writeFile(LOG_FILE, "CTRL A");
+						// writeFile(LOG_FILE, "CTRL A");
 						SendMessage(hwnd, EM_SETSEL, 0, -1);
 					}
 					break;
@@ -294,6 +289,28 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			break;
 	}
 	return CallWindowProc(originalTextProc, hwnd, msg, wParam, lParam);
+}
+
+static void addNewText(char *text, size_t length)
+{
+	// add new text to linked list
+	strcat(text, "\n");
+	append(&head, text, length+1);
+
+	// add text to listbox
+	SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
+
+	// keep list size limited
+	LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
+	if (rowCount > HISTORY_LIMIT)
+	{
+		SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
+		deleteHead();
+	}
+
+	// scroll to last row
+	SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
+	SetWindowText(textboxHwnd, "");
 }
 
 static void clearArray(char *array, int length)
@@ -461,7 +478,9 @@ static void readHistory(char *historyFile)
 	FILE *f = fopen(historyFile, "r");
 	if (f == NULL)
 	{
-		writeFile(LOG_FILE, "No history found");
+		char text[MAX_LINE] = "No history found";
+		writeFile(LOG_FILE, text);
+		addNewText(text, strlen(text));
 		return;
 	}
 
@@ -513,7 +532,7 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	// convert LPWSTR to char *
 	wcstombs(commandLine, lpCmdLine, MAX_LINE);
 	char buf[MAX_LINE];
-	sprintf(buf, "Command line converted: %s", commandLine);
+	sprintf(buf, "Command line: %s", commandLine);
 	writeFile(LOG_FILE, buf);
 
 	// get ip address
@@ -629,7 +648,7 @@ static void serverConfig(PVOID pvoid)
 			WSACleanup();
 			return;
 		}
-		// writeFile(LOG_FILE, "serverConfig: listen() ok");
+		// writeFile(LOG_FILE, "serverConfig: listen()");
 
 		// accept a new connection when available
 		while (!serverReady && serverSocket == SOCKET_ERROR)
@@ -641,7 +660,6 @@ static void serverConfig(PVOID pvoid)
 			writeFile(LOG_FILE, "serverConfig: accept() ok");
 			serverReady = true;
 			serverConnected = true;
-			// break;
 		}
 
 		if (!serverWaitingThreadStarted)
@@ -706,31 +724,16 @@ static void serverWaiting(PVOID pvoid)
 			// sprintf(buf, "serverWaiting: sender's port number: %d", htons(senderInfo.sin_port));
 			// writeFile(LOG_FILE, buf);
 
-			// print received bytes. note that this is the total bytes received,
-			// not the size of the declared buffer
+			// print received bytes. note that this is the total bytes received, not the size of the declared buffer
 			sprintf(buf, "serverWaiting: bytes received: %d", bytesReceived);
 			writeFile(LOG_FILE, buf);
 			writeFile(LOG_FILE, recvBuffer);
 
-			// add text to linked list
+			// add new text
 			char text[MAX_LINE] = "> ";
 			strcat(text, recvBuffer);
-			append(&head, text, strlen(text));
-
-			// add text to listbox
-			SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
-
-			// keep list size limited
-			LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
-			if (rowCount > HISTORY_LIMIT)
-			{
-				SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
-				deleteHead();
-			}
-
-			// scroll to last row
-			SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
-			SetWindowText(textboxHwnd, "");
+			text[bytesReceived+1] = '\0'; // remove \n
+			addNewText(text, strlen(text));
 		}
 
 		// no data
@@ -772,8 +775,6 @@ static void serverShutdown()
 		else
 			writeFile(LOG_FILE, "serverShutdown: shutdown()");
 	}
-
-	writeFile(LOG_FILE, "serverShutdown: listenSocket is timed out");
 
 	// when all data comms and listening are finished close the socket
 	if (closesocket(listenSocket) != 0)
@@ -842,7 +843,7 @@ static void clientConfig(PVOID pvoid)
 			clientConnected = true;
 	}
 	writeFile(LOG_FILE, "clientConfig: connect()");
-	writeFile(LOG_FILE, "clientConfig: ready for sending & receiving...");
+	// writeFile(LOG_FILE, "clientConfig: ready for sending & receiving...");
 
 	// info on receiver side
 //TODO what extra info does serverAddr have after this getsockname?
@@ -864,7 +865,6 @@ static void clientWaiting(PVOID pvoid)
 	while (waiting)
 	{
 		char buf[MAX_LINE] = "\0";
-		char sendBuffer[MAX_LINE] = "\0";
 		char recvBuffer[MAX_LINE] = "\0";
 
 		// check for incoming message
@@ -876,35 +876,19 @@ static void clientWaiting(PVOID pvoid)
 			sprintf(buf, "clientWaiting: bytes received: %d, %s", bytesReceived, recvBuffer);
 			writeFile(LOG_FILE, buf);
 
-			// add text to linked list
+			// add new text
 			char text[MAX_LINE] = "> ";
 			strcat(text, recvBuffer);
-			append(&head, text, strlen(text));
-
-			// add text to listbox
-			SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
-
-			// keep list size limited
-			LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
-			if (rowCount > HISTORY_LIMIT)
-			{
-				SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
-				deleteHead();
-			}
-
-			// scroll to last row
-			SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
-			SetWindowText(textboxHwnd, "");
+			text[bytesReceived+1] = '\0'; // remove \n
+			addNewText(text, strlen(text));
 		}
 
 		// no data
-		if (bytesReceived == 0)
-		{
-			writeFile(LOG_FILE, "clientWaiting: nothing received");
-			writeFile(LOG_FILE, "clientWaiting: connection closed/failed");
-			// clientSocket = (SOCKET)SOCKET_ERROR;
-			// waiting = false;
-		}
+		// if (bytesReceived == 0)
+		// {
+		// 	writeFile(LOG_FILE, "clientWaiting: nothing received");
+		// 	writeFile(LOG_FILE, "clientWaiting: connection closed/failed?");
+		// }
 
 		// errors
 		if (bytesReceived < 0)
