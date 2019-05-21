@@ -7,7 +7,7 @@
 #define INI_FILE "shakychat.ini"
 #define LOG_FILE "shakychat.log"
 #define HISTORY_FILE "shakychat.txt"
-#define HISTORY_LIMIT 8
+#define HISTORY_LIMIT 12
 #define MAX_LINE 62
 #define WINDOW_WIDTH 570
 #define WINDOW_HEIGHT 400
@@ -39,6 +39,7 @@ static void clientConfig(PVOID);
 static void clientWaiting(PVOID);
 static void clientShutdown();
 static void getWSAErrorText(char *, int);
+static void addNewText(char *, size_t);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
