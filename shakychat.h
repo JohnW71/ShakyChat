@@ -22,6 +22,16 @@ struct Node
 	struct Node *next;
 };
 
+struct State
+{
+	u_short port;
+	char ip[16];
+	bool isServer;
+	bool serverConnected;
+	bool clientConnected;
+	bool serverWaitingThreadStarted;
+} state;
+
 static void clearArray(char *, int);
 static void writeFile(char *, char *);
 static void readSettings(char *, HWND);

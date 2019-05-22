@@ -20,16 +20,15 @@ static SOCKET listenSocket;
 static SOCKET serverSocket;
 static SOCKET clientSocket;
 static struct Node *head = NULL;
-static u_short port = 5150;
-static char ip[16];
-static char errorMsg[MAX_LINE];
-static bool isServer = true;
-static bool serverConnected = false;
-static bool clientConnected = false;
-static bool serverWaitingThreadStarted = false;
+// static u_short port = 5150;
+// static char ip[16];
+// static bool isServer = true;
+// static bool serverConnected = false;
+// static bool clientConnected = false;
+// static bool serverWaitingThreadStarted = false;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
-	_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
+					_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
 	MSG msg = {0};
 	WNDCLASSEX wc = {0};
@@ -62,7 +61,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.61",
+		"ShakyChat v0.62",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -72,6 +71,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 		MessageBox(NULL, "Window creation failed", "Error", MB_ICONEXCLAMATION | MB_OK);
 		return EXIT_FAILURE;
 	}
+
+	state->port = 5150;
+	state->isServer = true;
+	state->serverConnected = false;
+	state->clientConnected = false;
+	state->serverWaitingThreadStarted = false;
 
 	parseCommandLine(lpCmdLine);
 	readSettings(INI_FILE, mainHwnd);
@@ -129,7 +134,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					KillTimer(hwnd, ID_TIMER1);
 				}
 
-				if (isServer)
+				if (state->isServer)
 					_beginthread(serverConfig, 0, NULL);
 				else
 					_beginthread(clientConfig, 0, NULL);
@@ -164,7 +169,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					// writeFile(LOG_FILE, "VK_ESCAPE");
 					writeSettings(INI_FILE, hwnd);
 					writeHistory(HISTORY_FILE);
-					if (isServer)
+					if (state->isServer)
 						serverShutdown();
 					else
 						clientShutdown();
@@ -176,7 +181,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			// writeFile(LOG_FILE, "WM_DESTROY");
 			writeSettings(INI_FILE, hwnd);
 			writeHistory(HISTORY_FILE);
-			if (isServer)
+			if (state->isServer)
 				serverShutdown();
 			else
 				clientShutdown();
@@ -220,6 +225,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					break;
 				case VK_RETURN:
 					// writeFile(LOG_FILE, "VK_RETURN");
+					char errorMsg[256];
 					char text[MAX_LINE];
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
@@ -228,9 +234,9 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 						// transmit message
 						char buf[MAX_LINE] = "\0";
-						if (isServer)
+						if (state->isServer)
 						{
-							if (serverConnected) // send data to client
+							if (state->serverConnected) // send data to client
 							{
 								int bytesSent = send(serverSocket, text, (int)strlen(text), 0);
 
@@ -254,7 +260,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 						}
 						else
 						{
-							if (clientConnected) // send data to server
+							if (state->clientConnected) // send data to server
 							{
 								int bytesSent = send(clientSocket, text, (int)strlen(text), 0);
 
@@ -527,7 +533,7 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	}
 
 	writeFile(LOG_FILE, "Starting as client");
-	isServer = false;
+	state->isServer = false;
 	char commandLine[MAX_LINE];
 	// convert LPWSTR to char *
 	wcstombs(commandLine, lpCmdLine, MAX_LINE);
@@ -539,10 +545,10 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	int i = 0;
 	while (commandLine[i] != ' ')
 	{
-		ip[i] = commandLine[i];
+		state->ip[i] = commandLine[i];
 		++i;
 	}
-	ip[i++] = '\0';
+	state->ip[i++] = '\0';
 
 	// get port number
 	char portText[MAX_LINE];
@@ -550,9 +556,9 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	int p = 0;
 	while (commandLine[i] != '\0')
 		portText[p++] = commandLine[i++];
-	port = (u_short)atoi(portText);
+	state->port = (u_short)atoi(portText);
 
-	sprintf(buf, "Command line IP: %s\nCommand line Port: %d", ip, port);
+	sprintf(buf, "Command line IP: %s\nCommand line Port: %d", state->ip, state->port);
 	writeFile(LOG_FILE, buf);
 }
 
@@ -578,6 +584,7 @@ static void serverConfig(PVOID pvoid)
 	writeFile(LOG_FILE, "serverConfig()");
 
 	char buf[MAX_LINE];
+	char errorMsg[256];
 	WSADATA wsa;
 
 	// initialize winsock v2.2
@@ -618,7 +625,7 @@ static void serverConfig(PVOID pvoid)
 
 	// configure SOCKADDR_IN structure to tell bind to listen for connections on all interfaces using port 5150
 	serverAddr.sin_family = AF_INET; // ipv4
-	serverAddr.sin_port = htons(port); // host to network byte order
+	serverAddr.sin_port = htons(state->port); // host to network byte order
 	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	// associate the address information with the socket using bind
@@ -659,12 +666,12 @@ static void serverConfig(PVOID pvoid)
 			serverSocket = accept(listenSocket, NULL, NULL);
 			writeFile(LOG_FILE, "serverConfig: accept() ok");
 			serverReady = true;
-			serverConnected = true;
+			state->serverConnected = true;
 		}
 
-		if (!serverWaitingThreadStarted)
+		if (!state->serverWaitingThreadStarted)
 		{
-			serverWaitingThreadStarted = true;
+			state->serverWaitingThreadStarted = true;
 			_beginthread(serverWaiting, 0, NULL);
 		}
 	}
@@ -675,8 +682,9 @@ static void serverWaiting(PVOID pvoid)
 	writeFile(LOG_FILE, "serverWaiting()");
 
 	bool waiting = true;
+	char errorMsg[256];
 
-	while (waiting && serverConnected)
+	while (waiting && state->serverConnected)
 	{
 		char buf[MAX_LINE] = "\0";
 		char recvBuffer[MAX_LINE] = "\0";
@@ -690,11 +698,12 @@ static void serverWaiting(PVOID pvoid)
 			writeFile(LOG_FILE, "serverWaiting: new client connected");
 
 			// info on receiver side, retrieves the local name for a socket
-			// if (getsockname(listenSocket, (SOCKADDR *)&serverAddr, (int *)sizeof(serverAddr)) != 0)
+			// socklen_t len = sizeof(serverAddr);
+			// if (getsockname(listenSocket, (SOCKADDR *)&serverAddr, &len) != 0)
 			// {
 			// 	getWSAErrorText(errorMsg, WSAGetLastError());
 			// 	sprintf(buf, "serverWaiting: getsockname() failed, error: %s", errorMsg);
-			// 	serverWaitingThreadStarted = false;
+			// 	state->serverWaitingThreadStarted = false;
 			// 	_endthread();
 			// }
 			// writeFile(LOG_FILE, "serverWaiting: getsockname() ok");
@@ -710,11 +719,11 @@ static void serverWaiting(PVOID pvoid)
 			// memset(&senderInfo, 0, senderInfoLength); // fill with 0
 
 			// the getpeername function retrieves the address of the peer to which a socket is connected
-			// if (getpeername(serverSocket, (SOCKADDR *)&senderInfo, &senderInfoLength) != 0)
+			// if (getpeername(serverSocket, (SOCKADDR *)&senderInfo, (socklen_t)&senderInfoLength) != 0)
 			// {
 			// 	getWSAErrorText(errorMsg, WSAGetLastError());
 			// 	sprintf(buf, "serverWaiting: getpeername() failed, error: %s", errorMsg);
-			// 	serverWaitingThreadStarted = false;
+			// 	state->serverWaitingThreadStarted = false;
 			// 	_endthread();
 			// }
 			// writeFile(LOG_FILE, "serverWaiting: getpeername() ok");
@@ -730,6 +739,7 @@ static void serverWaiting(PVOID pvoid)
 			writeFile(LOG_FILE, recvBuffer);
 
 			// add new text
+//TODO this could cause overrun? test with max text entry
 			char text[MAX_LINE] = "> ";
 			strcat(text, recvBuffer);
 			text[bytesReceived+1] = '\0'; // remove \n
@@ -762,6 +772,7 @@ static void serverShutdown()
 	writeFile(LOG_FILE, "serverShutdown()");
 
 	char buf[MAX_LINE];
+	char errorMsg[256];
 
 	if (serverSocket != SOCKET_ERROR)
 	{
@@ -802,6 +813,7 @@ static void clientConfig(PVOID pvoid)
 	writeFile(LOG_FILE, "clientConfig()");
 
 	char buf[MAX_LINE];
+	char errorMsg[256];
 	WSADATA wsa;
 
 	// initialize winsock v2.2
@@ -823,10 +835,10 @@ static void clientConfig(PVOID pvoid)
 
 	// create SOCKADDR_IN struct to connect to a listening server
 	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(port);
-	serverAddr.sin_addr.s_addr = inet_addr(ip);
+	serverAddr.sin_port = htons(state->port);
+	serverAddr.sin_addr.s_addr = inet_addr(state->ip);
 
-	while (!clientConnected && clientSocket)
+	while (!state->clientConnected && clientSocket)
 	{
 		// connect to the server with clientSocket
 		if (connect(clientSocket, (SOCKADDR *)&serverAddr, sizeof(serverAddr)) != 0)
@@ -840,14 +852,15 @@ static void clientConfig(PVOID pvoid)
 			// return;
 		}
 		else
-			clientConnected = true;
+			state->clientConnected = true;
 	}
 	writeFile(LOG_FILE, "clientConfig: connect()");
 	// writeFile(LOG_FILE, "clientConfig: ready for sending & receiving...");
 
 	// info on receiver side
-//TODO what extra info does serverAddr have after this getsockname?
-	getsockname(clientSocket, (SOCKADDR *)&serverAddr, (int *)sizeof(serverAddr));
+	socklen_t len = sizeof(serverAddr);
+	getsockname(clientSocket, (SOCKADDR *)&serverAddr, &len);
+
 	sprintf(buf, "clientConfig: connected to IP: %s", inet_ntoa(serverAddr.sin_addr));
 	writeFile(LOG_FILE, buf);
 	sprintf(buf, "clientConfig: connected to port: %d", htons(serverAddr.sin_port));
@@ -860,6 +873,7 @@ static void clientWaiting(PVOID pvoid)
 {
 	writeFile(LOG_FILE, "clientWaiting()");
 
+	char errorMsg[256];
 	bool waiting = true;
 
 	while (waiting)
@@ -877,6 +891,7 @@ static void clientWaiting(PVOID pvoid)
 			writeFile(LOG_FILE, buf);
 
 			// add new text
+//TODO this could cause overrun? test with max text entry
 			char text[MAX_LINE] = "> ";
 			strcat(text, recvBuffer);
 			text[bytesReceived+1] = '\0'; // remove \n
@@ -920,7 +935,8 @@ static void clientWaiting(PVOID pvoid)
 			// 	memset(&senderInfo, 0, senderInfoLength); // fill with 0
 
 			// 	// info on this sender side
-			// 	getsockname(clientSocket, (SOCKADDR *)&senderInfo, &senderInfoLength);
+			//  // socklen_t len = sizeof(senderInfo);
+			//  getsockname(clientSocket, (SOCKADDR *)&senderInfo, (socklen_t)&senderInfoLength);
 			// 	sprintf(buf, "clientWaiting: sending from IP: %s", inet_ntoa(senderInfo.sin_addr));
 			// 	writeFile(LOG_FILE, buf);
 			// 	sprintf(buf, "clientWaiting: sending from port: %d", htons(senderInfo.sin_port));
@@ -937,13 +953,14 @@ static void clientWaiting(PVOID pvoid)
 static void clientShutdown()
 {
 	writeFile(LOG_FILE, "clientShutdown()");
-
-	char buf[MAX_LINE];
+	char errorMsg[256];
 
 	if (clientSocket)
 	{
+		char buf[MAX_LINE];
+
 		// clean up all send/receive comms, ready for new one
-		if (clientConnected && shutdown(clientSocket, SD_BOTH) != 0)
+		if (state->clientConnected && shutdown(clientSocket, SD_BOTH) != 0)
 		{
 			getWSAErrorText(errorMsg, WSAGetLastError());
 			sprintf(buf, "clientShutdown: shutdown() failed, error: %s", errorMsg);
