@@ -16,11 +16,11 @@
 #define assert(expression) if(!(expression)) {*(int *)0 = 0;}
 #define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
 
-struct Node
-{
-	char *text;
-	struct Node *next;
-};
+// struct Node
+// {
+// 	char *text;
+// 	struct Node *next;
+// };
 
 struct State
 {
@@ -36,9 +36,9 @@ static void clearArray(char *, int);
 static void writeFile(char *, char *);
 static void readSettings(char *, HWND);
 static void writeSettings(char *, HWND);
-static void fillListbox(char *, HWND);
-static void append(struct Node **, char *, size_t);
-static void deleteHead();
+// static void fillListbox(char *, HWND);
+// static void append(struct Node **, char *, size_t);
+// static void deleteHead();
 static void readHistory(char *);
 static void writeHistory(char *);
 static void parseCommandLine(LPWSTR);

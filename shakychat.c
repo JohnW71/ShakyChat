@@ -19,7 +19,7 @@ static SOCKADDR_IN serverAddr;
 static SOCKET listenSocket;
 static SOCKET serverSocket;
 static SOCKET clientSocket;
-static struct Node *head = NULL;
+// static struct Node *head = NULL;
 // static u_short port = 5150;
 // static char ip[16];
 // static bool isServer = true;
@@ -301,7 +301,7 @@ static void addNewText(char *text, size_t length)
 {
 	// add new text to linked list
 	strcat(text, "\n");
-	append(&head, text, length+1);
+	// append(&head, text, length+1);
 
 	// add text to listbox
 	SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
@@ -311,7 +311,7 @@ static void addNewText(char *text, size_t length)
 	if (rowCount > HISTORY_LIMIT)
 	{
 		SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
-		deleteHead();
+		// deleteHead();
 	}
 
 	// scroll to last row
@@ -425,58 +425,58 @@ static void readSettings(char *iniFile, HWND hwnd)
 	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, WINDOW_WIDTH, windowHeight, SWP_SHOWWINDOW);
 }
 
-static void fillListbox(char *historyFile, HWND hwnd)
-{
-	writeFile(LOG_FILE, "fillListbox()");
-	int count = 0;
-	struct Node *node = head;
-	while (node != NULL)
-	{
-		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)node->text);
-		node = node->next;
-	}
-}
+// static void fillListbox(char *historyFile, HWND hwnd)
+// {
+// 	writeFile(LOG_FILE, "fillListbox()");
+// 	int count = 0;
+// 	struct Node *node = head;
+// 	while (node != NULL)
+// 	{
+// 		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)node->text);
+// 		node = node->next;
+// 	}
+// }
 
-static void append(struct Node **head_ref, char *text, size_t length)
-{
-	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
-	newNode->next = NULL;
-	newNode->text = malloc(length);
-	strcpy(newNode->text, text);
+// static void append(struct Node **head_ref, char *text, size_t length)
+// {
+// 	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
+// 	newNode->next = NULL;
+// 	newNode->text = malloc(length);
+// 	strcpy(newNode->text, text);
 
-	// if list is empty make newNode into head
-	if (*head_ref == NULL)
-	{
-		*head_ref = newNode;
-		return;
-	}
+// 	// if list is empty make newNode into head
+// 	if (*head_ref == NULL)
+// 	{
+// 		*head_ref = newNode;
+// 		return;
+// 	}
 
-	// move to last node
-	struct Node *last = *head_ref;
-	while (last->next != NULL)
-		last = last->next;
+// 	// move to last node
+// 	struct Node *last = *head_ref;
+// 	while (last->next != NULL)
+// 		last = last->next;
 
-	// append new node
-	last->next = newNode;
-}
+// 	// append new node
+// 	last->next = newNode;
+// }
 
-static void deleteHead()
-{
-	writeFile(LOG_FILE, "deleteHead()");
-	if (head == NULL)
-	{
-		writeFile(LOG_FILE, "Null head");
-		return;
-	}
+// static void deleteHead()
+// {
+// 	writeFile(LOG_FILE, "deleteHead()");
+// 	if (head == NULL)
+// 	{
+// 		writeFile(LOG_FILE, "Null head");
+// 		return;
+// 	}
 
-	// store current head node
-	struct Node *previous = head;
+// 	// store current head node
+// 	struct Node *previous = head;
 
-	// move head to next node
-	head = previous->next;
-	free(previous->text);
-	free(previous);
-}
+// 	// move head to next node
+// 	head = previous->next;
+// 	free(previous->text);
+// 	free(previous);
+// }
 
 static void readHistory(char *historyFile)
 {
@@ -491,14 +491,15 @@ static void readHistory(char *historyFile)
 	}
 
 	char line[MAX_LINE];
-	int rowCount = 0;
+	// int rowCount = 0;
 	while (fgets(line, MAX_LINE, f) != NULL)
 	{
-		if (++rowCount > HISTORY_LIMIT)
-			deleteHead();
+		// if (++rowCount > HISTORY_LIMIT)
+		// 	deleteHead();
 
-		size_t length = strlen(line);
-		append(&head, line, length);
+		// size_t length = strlen(line);
+		// append(&head, line, length);
+		addNewText(line, strlen(line));
 	}
 
 	fclose(f);
@@ -514,11 +515,20 @@ static void writeHistory(char *historyFile)
 		return;
 	}
 
-	struct Node *node = head;
-	while (node != NULL)
+	// struct Node *node = head;
+	// while (node != NULL)
+	// {
+	// 	fprintf(f, "%s", node->text);
+	// 	node = node->next;
+	// }
+
+	LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
+	for (int i = 0; i < rowCount; ++i)
 	{
-		fprintf(f, "%s", node->text);
-		node = node->next;
+		char row[MAX_LINE] = "\0";
+		int textLen = (int)SendMessage(listboxHwnd, LB_GETTEXT, rowCount, (LPARAM)row);
+		row[textLen] = '\0';
+		fprintf(f, "%s", row);
 	}
 
 	fclose(f);
