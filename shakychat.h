@@ -7,7 +7,7 @@
 #define INI_FILE "shakychat.ini"
 #define LOG_FILE "shakychat.log"
 #define HISTORY_FILE "shakychat.txt"
-#define HISTORY_LIMIT 12
+#define HISTORY_LIMIT 50
 #define MAX_LINE 62
 #define WINDOW_WIDTH 570
 #define WINDOW_HEIGHT 400
