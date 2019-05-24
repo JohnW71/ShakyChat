@@ -33,6 +33,7 @@ struct State
 } state;
 
 static void clearArray(char *, int);
+static void clearNewlines(char *, int);
 static void writeFile(char *, char *);
 static void readSettings(char *, HWND);
 static void writeSettings(char *, HWND);
