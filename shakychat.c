@@ -57,7 +57,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.62",
+		"ShakyChat v0.63",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -162,7 +162,7 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					// writeFile(LOG_FILE, "VK_ESCAPE");
+					writeFile(LOG_FILE, "VK_ESCAPE, key up");
 					writeSettings(INI_FILE, hwnd);
 					writeHistory(HISTORY_FILE);
 					if (state.isServer)
@@ -195,7 +195,7 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					// writeFile(LOG_FILE, "VK_ESCAPE");
+					writeFile(LOG_FILE, "VK_ESCAPE, listbox");
 					writeSettings(INI_FILE, mainHwnd);
 					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
@@ -214,7 +214,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					// writeFile(LOG_FILE, "VK_ESCAPE");
+					writeFile(LOG_FILE, "VK_ESCAPE, textbox");
 					writeSettings(INI_FILE, mainHwnd);
 					writeHistory(HISTORY_FILE);
 					PostQuitMessage(0);
@@ -226,23 +226,23 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
 					{
+					// automatic test messages
+					// for (int i = 0; i < 100; ++i)
+					// {
+					// 	Sleep(100);
+					// 	clearArray(text, MAX_LINE);
+					// 	for (int pos = 0; pos < MAX_LINE - 4; ++pos)
+					// 	{
+					// 		int rn = rand() % 127;
+					// 		if (rn < 33)
+					// 		{
+					// 			--pos;
+					// 			continue;
+					// 		}
+					// 		text[pos] = (char)rn;
+					// 	}
 
-						for (int i = 0; i < 100; ++i)
-						{
-							Sleep(100);
-							clearArray(text, MAX_LINE);
-							for (int pos = 0; pos < MAX_LINE - 4; ++pos)
-							{
-								int rn = rand() % 127;
-								if (rn < 33)
-								{
-									--pos;
-									continue;
-								}
-								text[pos] = (char)rn;
-							}
-							text[MAX_LINE - 1] = '\0';
-
+						clearNewlines(text, MAX_LINE);
 						addNewText(text, strlen(text));
 
 						// transmit message
@@ -267,7 +267,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 							}
 							else
 							{
-								strcpy(text, "#Server not connected!");
+								strcpy(text, "#Client not connected!");
 								addNewText(text, strlen(text));
 							}
 						}
@@ -291,11 +291,11 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 							}
 							else
 							{
-								strcpy(text, "#Client not connected!");
+								strcpy(text, "#Server not connected!");
 								addNewText(text, strlen(text));
 							}
 						}
-					}
+					// }
 					}
 					break;
 				case 'A': // CTRL A
@@ -314,7 +314,6 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 static void addNewText(char *text, size_t length)
 {
 	// add new text to linked list
-	strcat(text, "\n");
 	// append(&head, text, length+1);
 
 	// add text to listbox
@@ -337,6 +336,13 @@ static void clearArray(char *array, int length)
 {
 	for (int i = 0; i < length; ++i)
 		array[i] = '\0';
+}
+
+static void clearNewlines(char *array, int length)
+{
+	for (int i = 0; i < length; ++i)
+		if (array[i] == '\n')
+			array[i] = '\0';
 }
 
 static void writeFile(char *filename, char *text)
@@ -542,7 +548,8 @@ static void writeHistory(char *historyFile)
 		char row[MAX_LINE] = "\0";
 		int textLen = (int)SendMessage(listboxHwnd, LB_GETTEXT, i, (LPARAM)row);
 		row[textLen] = '\0';
-		fprintf(f, "%s", row);
+		clearNewlines(row, MAX_LINE);
+		fprintf(f, "%s\n", row);
 	}
 
 	fclose(f);
@@ -765,7 +772,7 @@ static void serverWaiting(PVOID pvoid)
 			// add new text
 			char text[MAX_LINE] = "> ";
 			strcat(text, recvBuffer);
-			text[bytesReceived+1] = '\0'; // remove \n
+			clearNewlines(text, MAX_LINE);
 			addNewText(text, strlen(text));
 		}
 
@@ -917,7 +924,7 @@ static void clientWaiting(PVOID pvoid)
 			// add new text
 			char text[MAX_LINE] = "> ";
 			strcat(text, recvBuffer);
-			text[bytesReceived+1] = '\0'; // remove \n
+			clearNewlines(text, MAX_LINE);
 			addNewText(text, strlen(text));
 		}
 
