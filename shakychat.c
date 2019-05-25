@@ -57,7 +57,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.64",
+		"ShakyChat v0.65",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -220,7 +220,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					// {
 					// 	Sleep(100);
 					// 	clearArray(text, MAX_LINE);
-					// 	for (int pos = 0; pos < MAX_LINE - 4; ++pos)
+					// 	for (int pos = 0; pos < (rand() % (MAX_LINE - 4)); ++pos)
 					// 	{
 					// 		int rn = rand() % 127;
 					// 		if (rn < 33)
@@ -360,8 +360,8 @@ static void writeFile(char *filename, char *text)
 {
 	while(state.writing)
 	{
-		// char t[MAX_LINE] = "writing blocked";
-		// addNewText(t, strlen(t));
+		char t[MAX_LINE] = "writing blocked";
+		addNewText(t, strlen(t));
 		Sleep(100);
 	}
 
@@ -694,9 +694,7 @@ static void serverConfig(PVOID pvoid)
 	writeFile(LOG_FILE, "serverConfig: bind()");
 
 	serverSocket = (SOCKET)SOCKET_ERROR;
-	// bool serverReady = false;
 	while (state.serverListening)
-	// while (1)
 	{
 		// listen for client connections. backlog of 5 is common
 		if (listen(listenSocket, 5) == SOCKET_ERROR)
@@ -712,14 +710,12 @@ static void serverConfig(PVOID pvoid)
 
 		// accept a new connection when available
 		while (serverSocket == SOCKET_ERROR)
-		// while (!serverReady && serverSocket == SOCKET_ERROR)
 		{
 			// accept connection on listenSocket and assign it to serverSocket
 			// let listenSocket keep listening for more connections
 			writeFile(LOG_FILE, "serverConfig: accept()");
 			serverSocket = accept(listenSocket, NULL, NULL);
 			writeFile(LOG_FILE, "serverConfig: accept() ok");
-			// serverReady = true;
 			state.serverConnected = true;
 		}
 
@@ -775,8 +771,13 @@ static void serverWaiting(PVOID pvoid)
 		// errors
 		if (bytesReceived < 0)
 		{
+			if (WSAGetLastError() == 10054)
+			{
+				char text[MAX_LINE] = "#Client has disconnected!";
+				addNewText(text, strlen(text));
+			}
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "serverWaiting: recv() failed, error: %s", errorMsg);
+			sprintf(buf, "serverWaiting: recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
 			writeFile(LOG_FILE, buf);
 			serverSocket = (SOCKET)SOCKET_ERROR;
 			waiting = false;
@@ -843,27 +844,23 @@ static void clientConfig(PVOID pvoid)
 
 	while (state.clientTalking)
 	{
-
 		while(clientSocket == SOCKET_ERROR)
 		{
-	// create client socket
-	clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (clientSocket == INVALID_SOCKET)
-	{
-		getWSAErrorText(errorMsg, WSAGetLastError());
-		sprintf(buf, "clientConfig: socket() failed, error: %s", errorMsg);
-		writeFile(LOG_FILE, buf);
-		// WSACleanup();
-		// return;
-	}
-	// writeFile(LOG_FILE, "clientConfig: socket()");
+			// create client socket
+			clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if (clientSocket == INVALID_SOCKET)
+			{
+				getWSAErrorText(errorMsg, WSAGetLastError());
+				sprintf(buf, "clientConfig: socket() failed, error: %s", errorMsg);
+				writeFile(LOG_FILE, buf);
+			}
 
-	// create SOCKADDR_IN struct to connect to a listening server
-	serverAddr.sin_family = AF_INET;
-	serverAddr.sin_port = htons(state.port);
-	serverAddr.sin_addr.s_addr = inet_addr(state.ip);
+			// create SOCKADDR_IN struct to connect to a listening server
+			serverAddr.sin_family = AF_INET;
+			serverAddr.sin_port = htons(state.port);
+			serverAddr.sin_addr.s_addr = inet_addr(state.ip);
 		}
-		
+
 		// while (clientSocket == SOCKET_ERROR)
 		while (!state.clientConnected && clientSocket)
 		{
@@ -876,10 +873,7 @@ static void clientConfig(PVOID pvoid)
 				Sleep(2000);
 			}
 			else
-			{
 				state.clientConnected = true;
-				// writeFile(LOG_FILE, "clientConfig: connect()");
-			}
 		}
 
 		if (!state.clientWaitingThreadStarted)
@@ -938,8 +932,13 @@ static void clientWaiting(PVOID pvoid)
 		// errors
 		if (bytesReceived < 0)
 		{
+			if (WSAGetLastError() == 10053)
+			{
+				char text[MAX_LINE] = "#Server has disconnected!";
+				addNewText(text, strlen(text));
+			}
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "clientWaiting: recv() failed, error: %s", errorMsg);
+			sprintf(buf, "clientWaiting: recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
 			writeFile(LOG_FILE, buf);
 			clientSocket = (SOCKET)SOCKET_ERROR;
 			state.clientConnected = false;
