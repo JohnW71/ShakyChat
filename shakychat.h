@@ -27,9 +27,13 @@ struct State
 	u_short port;
 	char ip[16];
 	bool isServer;
+	bool serverListening;
 	bool serverConnected;
-	bool clientConnected;
 	bool serverWaitingThreadStarted;
+	bool clientTalking;
+	bool clientConnected;
+	bool clientWaitingThreadStarted;
+	bool writing;
 } state;
 
 static void clearArray(char *, int);
@@ -51,6 +55,7 @@ static void clientWaiting(PVOID);
 static void clientShutdown();
 static void getWSAErrorText(char *, int);
 static void addNewText(char *, size_t);
+static void shutDown(void);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);
