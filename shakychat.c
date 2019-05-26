@@ -20,7 +20,6 @@ static SOCKADDR_IN serverAddr;
 static SOCKET listenSocket;
 static SOCKET serverSocket;
 static SOCKET clientSocket;
-// static struct Node *head = NULL;
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 					_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
@@ -57,7 +56,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.65",
+		"ShakyChat v0.7",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -77,6 +76,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	state.clientConnected = false;
 	state.clientWaitingThreadStarted = false;
 	state.writing = false;
+	state.scrollListbox = false;
 
 	parseCommandLine(lpCmdLine);
 	readSettings(INI_FILE, mainHwnd);
@@ -100,7 +100,8 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg)
 	{
 		case WM_CREATE:
-			SetTimer(hwnd, ID_TIMER1, 100, NULL);
+			SetTimer(hwnd, ID_TIMER1, 100, NULL); // populate listbox
+			SetTimer(hwnd, ID_TIMER2, 200, NULL); // maintain focus in textbox
 
 			// listbox
 			listboxHwnd = CreateWindowEx(WS_EX_LEFT, "ListBox", NULL,
@@ -120,7 +121,6 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			{
 				// populate listbox
 				readHistory(HISTORY_FILE);
-				// fillListbox(HISTORY_FILE, listboxHwnd);
 
 				// limit text field length
 				SendMessage(textboxHwnd, EM_LIMITTEXT, MAX_LINE-4, 0);
@@ -138,6 +138,10 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					_beginthread(serverConfig, 0, NULL);
 				else
 					_beginthread(clientConfig, 0, NULL);
+			}
+			if (wParam == ID_TIMER2)
+			{
+				SetFocus(textboxHwnd);
 			}
 			break;
 		case WM_COMMAND:
@@ -166,13 +170,11 @@ LRESULT CALLBACK mainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					writeFile(LOG_FILE, "VK_ESCAPE, key up");
 					shutDown();
 					break;
 			}
 			break;
 		case WM_DESTROY:
-			writeFile(LOG_FILE, "WM_DESTROY");
 			shutDown();
 			break;
 	}
@@ -187,7 +189,6 @@ LRESULT CALLBACK customListboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					writeFile(LOG_FILE, "VK_ESCAPE, listbox");
 					shutDown();
 					break;
 			}
@@ -204,11 +205,9 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 			switch (wParam)
 			{
 				case VK_ESCAPE:
-					writeFile(LOG_FILE, "VK_ESCAPE, textbox");
 					shutDown();
 					break;
 				case VK_RETURN:
-					// writeFile(LOG_FILE, "VK_RETURN");
 					char errorMsg[256];
 					char text[MAX_LINE];
 					GetWindowText(hwnd, text, MAX_LINE);
@@ -302,8 +301,6 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 static void shutDown(void)
 {
-	writeFile(LOG_FILE, "shutdown()");
-
 	if (state.isServer)
 	{
 		state.serverConnected = false;
@@ -324,23 +321,20 @@ static void shutDown(void)
 
 static void addNewText(char *text, size_t length)
 {
-	// add new text to linked list
-	// append(&head, text, length+1);
-
 	// add text to listbox
 	SendMessage(listboxHwnd, LB_ADDSTRING, 0, (LPARAM)text);
 
 	// keep list size limited
 	LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
 	if (rowCount > HISTORY_LIMIT)
-	{
 		SendMessage(listboxHwnd, LB_DELETESTRING, 0, 0);
-		// deleteHead();
-	}
 
 	// scroll to last row
-	SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
-	SetWindowText(textboxHwnd, "");
+	if (state.scrollListbox)
+	{
+		SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
+		SetWindowText(textboxHwnd, "");
+	}
 }
 
 static void clearArray(char *array, int length)
@@ -360,7 +354,7 @@ static void writeFile(char *filename, char *text)
 {
 	while(state.writing)
 	{
-		char t[MAX_LINE] = "writing blocked";
+		char t[MAX_LINE] = "#Writing blocked";
 		addNewText(t, strlen(t));
 		Sleep(100);
 	}
@@ -381,7 +375,6 @@ static void writeFile(char *filename, char *text)
 
 static void writeSettings(char *iniFile, HWND hwnd)
 {
-	writeFile(LOG_FILE, "writeSettings()");
 	FILE *f = fopen(iniFile, "w");
 	if (f == NULL)
 	{
@@ -403,7 +396,6 @@ static void writeSettings(char *iniFile, HWND hwnd)
 
 static void readSettings(char *iniFile, HWND hwnd)
 {
-	writeFile(LOG_FILE, "readSettings()");
 	FILE *f = fopen(iniFile, "r");
 	if (f == NULL)
 	{
@@ -466,62 +458,8 @@ static void readSettings(char *iniFile, HWND hwnd)
 	SetWindowPos(hwnd, HWND_TOP, windowCol, windowRow, WINDOW_WIDTH, windowHeight, SWP_SHOWWINDOW);
 }
 
-// static void fillListbox(char *historyFile, HWND hwnd)
-// {
-// 	writeFile(LOG_FILE, "fillListbox()");
-// 	int count = 0;
-// 	struct Node *node = head;
-// 	while (node != NULL)
-// 	{
-// 		SendMessage(hwnd, LB_ADDSTRING, count++, (LPARAM)node->text);
-// 		node = node->next;
-// 	}
-// }
-
-// static void append(struct Node **head_ref, char *text, size_t length)
-// {
-// 	struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
-// 	newNode->next = NULL;
-// 	newNode->text = malloc(length);
-// 	strcpy(newNode->text, text);
-
-// 	// if list is empty make newNode into head
-// 	if (*head_ref == NULL)
-// 	{
-// 		*head_ref = newNode;
-// 		return;
-// 	}
-
-// 	// move to last node
-// 	struct Node *last = *head_ref;
-// 	while (last->next != NULL)
-// 		last = last->next;
-
-// 	// append new node
-// 	last->next = newNode;
-// }
-
-// static void deleteHead()
-// {
-// 	writeFile(LOG_FILE, "deleteHead()");
-// 	if (head == NULL)
-// 	{
-// 		writeFile(LOG_FILE, "Null head");
-// 		return;
-// 	}
-
-// 	// store current head node
-// 	struct Node *previous = head;
-
-// 	// move head to next node
-// 	head = previous->next;
-// 	free(previous->text);
-// 	free(previous);
-// }
-
 static void readHistory(char *historyFile)
 {
-	writeFile(LOG_FILE, "readHistory()");
 	FILE *f = fopen(historyFile, "r");
 	if (f == NULL)
 	{
@@ -532,36 +470,23 @@ static void readHistory(char *historyFile)
 	}
 
 	char line[MAX_LINE];
-	// int rowCount = 0;
 	while (fgets(line, MAX_LINE, f) != NULL)
-	{
-		// if (++rowCount > HISTORY_LIMIT)
-		// 	deleteHead();
-
-		// size_t length = strlen(line);
-		// append(&head, line, length);
 		addNewText(line, strlen(line));
-	}
 
+	// scrollbox is not scrolled to bottom during initial history load
+	// after this it will be working again
+	state.scrollListbox = true;
 	fclose(f);
 }
 
 static void writeHistory(char *historyFile)
 {
-	writeFile(LOG_FILE, "writeHistory()");
 	FILE *f = fopen(historyFile, "w");
 	if (f == NULL)
 	{
 		MessageBox(NULL, "Can't write history file", "Error", MB_ICONEXCLAMATION | MB_OK);
 		return;
 	}
-
-	// struct Node *node = head;
-	// while (node != NULL)
-	// {
-	// 	fprintf(f, "%s", node->text);
-	// 	node = node->next;
-	// }
 
 	LRESULT rowCount = SendMessage(listboxHwnd, LB_GETCOUNT, 0, 0);
 	for (int i = 0; i < rowCount; ++i)
@@ -633,8 +558,6 @@ static void getWSAErrorText(char *text, int code)
 
 static void serverConfig(PVOID pvoid)
 {
-	writeFile(LOG_FILE, "serverConfig()");
-
 	char buf[MAX_LINE];
 	char errorMsg[256];
 	WSADATA wsa;
@@ -729,8 +652,6 @@ static void serverConfig(PVOID pvoid)
 
 static void serverWaiting(PVOID pvoid)
 {
-	writeFile(LOG_FILE, "serverWaiting()");
-
 	char errorMsg[256];
 	bool waiting = true;
 
@@ -757,18 +678,12 @@ static void serverWaiting(PVOID pvoid)
 			strcat(text, recvBuffer);
 			clearNewlines(text, MAX_LINE);
 			addNewText(text, strlen(text));
+
+			// bring window to front, first line only would be permanently in front
+			SetWindowPos(mainHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+			SetWindowPos(mainHwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 		}
 
-		// no data
-		// if (bytesReceived == 0)
-		// {
-		// 	writeFile(LOG_FILE, "Server: nothing received");
-		// 	writeFile(LOG_FILE, "Server: connection closed/failed");
-			// serverSocket = (SOCKET)SOCKET_ERROR;
-			// waiting = false;
-		// }
-
-		// errors
 		if (bytesReceived < 0)
 		{
 			if (WSAGetLastError() == 10054)
@@ -788,8 +703,6 @@ static void serverWaiting(PVOID pvoid)
 
 static void serverShutdown()
 {
-	writeFile(LOG_FILE, "serverShutdown()");
-
 	char buf[MAX_LINE];
 	char errorMsg[256];
 
@@ -829,8 +742,6 @@ static void serverShutdown()
 
 static void clientConfig(PVOID pvoid)
 {
-	writeFile(LOG_FILE, "clientConfig()");
-
 	char buf[MAX_LINE];
 	char errorMsg[256];
 	WSADATA wsa;
@@ -895,8 +806,6 @@ static void clientConfig(PVOID pvoid)
 
 static void clientWaiting(PVOID pvoid)
 {
-	writeFile(LOG_FILE, "clientWaiting()");
-
 	char errorMsg[256];
 	bool waiting = true;
 
@@ -920,16 +829,12 @@ static void clientWaiting(PVOID pvoid)
 			strcat(text, recvBuffer);
 			clearNewlines(text, MAX_LINE);
 			addNewText(text, strlen(text));
+
+			// bring window to front, first line only would be permanently in front
+			SetWindowPos(mainHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+			SetWindowPos(mainHwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 		}
 
-		// no data
-		// if (bytesReceived == 0)
-		// {
-		// 	writeFile(LOG_FILE, "clientWaiting: nothing received");
-		// 	writeFile(LOG_FILE, "clientWaiting: connection closed/failed?");
-		// }
-
-		// errors
 		if (bytesReceived < 0)
 		{
 			if (WSAGetLastError() == 10053)
@@ -950,7 +855,6 @@ static void clientWaiting(PVOID pvoid)
 
 static void clientShutdown()
 {
-	writeFile(LOG_FILE, "clientShutdown()");
 	char errorMsg[256];
 
 	if (clientSocket != SOCKET_ERROR)

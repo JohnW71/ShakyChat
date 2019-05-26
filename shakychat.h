@@ -3,11 +3,12 @@
 #define ID_MAIN_TEXTBOX 20
 #define ID_MAIN_LISTBOX 21
 #define ID_TIMER1 1
+#define ID_TIMER2 2
 
 #define INI_FILE "shakychat.ini"
 #define LOG_FILE "shakychat.log"
 #define HISTORY_FILE "shakychat.txt"
-#define HISTORY_LIMIT 50
+#define HISTORY_LIMIT 200
 #define MAX_LINE 62
 #define WINDOW_WIDTH 570
 #define WINDOW_HEIGHT 400
@@ -15,12 +16,6 @@
 
 #define assert(expression) if(!(expression)) {*(int *)0 = 0;}
 #define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
-
-// struct Node
-// {
-// 	char *text;
-// 	struct Node *next;
-// };
 
 struct State
 {
@@ -34,6 +29,7 @@ struct State
 	bool clientConnected;
 	bool clientWaitingThreadStarted;
 	bool writing;
+	bool scrollListbox;
 } state;
 
 static void clearArray(char *, int);
@@ -41,9 +37,6 @@ static void clearNewlines(char *, int);
 static void writeFile(char *, char *);
 static void readSettings(char *, HWND);
 static void writeSettings(char *, HWND);
-// static void fillListbox(char *, HWND);
-// static void append(struct Node **, char *, size_t);
-// static void deleteHead();
 static void readHistory(char *);
 static void writeHistory(char *);
 static void parseCommandLine(LPWSTR);
