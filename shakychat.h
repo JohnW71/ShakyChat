@@ -14,9 +14,6 @@
 #define WINDOW_HEIGHT 400
 #define WINDOW_HEIGHT_MINIMUM 200
 
-#define assert(expression) if(!(expression)) {*(int *)0 = 0;}
-#define arrayCount(array) (sizeof(array) / sizeof((array)[0]))
-
 struct State
 {
 	u_short port;
@@ -32,7 +29,6 @@ struct State
 	bool scrollListbox;
 } state;
 
-static void clearArray(char *, int);
 static void clearNewlines(char *, int);
 static void writeFile(char *, char *);
 static void readSettings(char *, HWND);
