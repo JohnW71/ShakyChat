@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <WinSock2.h>
 #include <process.h>
-#include <time.h>
 
 #include "shakychat.h"
 
@@ -26,7 +25,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 {
 	MSG msg = {0};
 	WNDCLASSEX wc = {0};
-	srand((unsigned int)time(NULL));
 
 	// reset log file
 	FILE *f = fopen(LOG_FILE, "w");
@@ -56,7 +54,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.7",
+		"ShakyChat v0.8",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -213,23 +211,6 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
 					{
-
-					// automatic test messages
-					// for (int i = 0; i < 100; ++i)
-					// {
-					// 	Sleep(100);
-					// 	clearArray(text, MAX_LINE);
-					// 	for (int pos = 0; pos < (rand() % (MAX_LINE - 4)); ++pos)
-					// 	{
-					// 		int rn = rand() % 127;
-					// 		if (rn < 33)
-					// 		{
-					// 			--pos;
-					// 			continue;
-					// 		}
-					// 		text[pos] = (char)rn;
-					// 	}
-
 						clearNewlines(text, MAX_LINE);
 						addNewText(text, strlen(text));
 
@@ -251,6 +232,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 								{
 									sprintf(buf, "Server: sent %d bytes: %s", bytesSent, text);
 									writeFile(LOG_FILE, buf);
+									SetWindowText(textboxHwnd, "");
 								}
 							}
 							else
@@ -275,6 +257,7 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 								{
 									sprintf(buf, "Client: sent %d bytes: %s", bytesSent, text);
 									writeFile(LOG_FILE, buf);
+									SetWindowText(textboxHwnd, "");
 								}
 							}
 							else
@@ -283,13 +266,11 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 								addNewText(text, strlen(text));
 							}
 						}
-					// }
 					}
 					break;
 				case 'A': // CTRL A
 					if (GetAsyncKeyState(VK_CONTROL))
 					{
-						// writeFile(LOG_FILE, "CTRL A");
 						SendMessage(hwnd, EM_SETSEL, 0, -1);
 					}
 					break;
@@ -331,19 +312,10 @@ static void addNewText(char *text, size_t length)
 
 	// scroll to last row
 	if (state.scrollListbox)
-	{
 		SendMessage(listboxHwnd, WM_VSCROLL, SB_BOTTOM, 0);
-		SetWindowText(textboxHwnd, "");
-	}
 }
 
-static void clearArray(char *array, int length)
-{
-	for (int i = 0; i < length; ++i)
-		array[i] = '\0';
-}
-
-static void clearNewlines(char *array, int length)
+ static void clearNewlines(char *array, int length)
 {
 	for (int i = 0; i < length; ++i)
 		if (array[i] == '\n')
@@ -415,14 +387,11 @@ static void readSettings(char *iniFile, HWND hwnd)
 		if (line[0] == '#')
 			continue;
 
-		char setting[MAX_LINE];
-		char value[MAX_LINE];
+		char setting[MAX_LINE] = {0};
+		char value[MAX_LINE] ={0};
 		char *l = line;
 		char *s = setting;
 		char *v = value;
-
-		clearArray(setting, MAX_LINE);
-		clearArray(value, MAX_LINE);
 
 		// read setting
 		while (*l && *l != '=')
@@ -512,7 +481,6 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	writeFile(LOG_FILE, "Starting as client");
 	state.isServer = false;
 	char commandLine[MAX_LINE];
-	// convert LPWSTR to char *
 	wcstombs(commandLine, lpCmdLine, MAX_LINE);
 	char buf[MAX_LINE];
 	sprintf(buf, "Command line: %s", commandLine);
@@ -528,8 +496,7 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	state.ip[i++] = '\0';
 
 	// get port number
-	char portText[MAX_LINE];
-	clearArray(portText, MAX_LINE);
+	char portText[MAX_LINE] = {0};
 	int p = 0;
 	while (commandLine[i] != '\0')
 		portText[p++] = commandLine[i++];
@@ -657,8 +624,8 @@ static void serverWaiting(PVOID pvoid)
 
 	while (waiting && state.serverConnected)
 	{
-		char buf[MAX_LINE] = "\0";
-		char recvBuffer[MAX_LINE] = "\0";
+		char buf[MAX_LINE] = {0};
+		char recvBuffer[MAX_LINE] = {0};
 
 		// check for incoming message
 		int bytesReceived = recv(serverSocket, recvBuffer, sizeof(recvBuffer), 0);
@@ -772,7 +739,6 @@ static void clientConfig(PVOID pvoid)
 			serverAddr.sin_addr.s_addr = inet_addr(state.ip);
 		}
 
-		// while (clientSocket == SOCKET_ERROR)
 		while (!state.clientConnected && clientSocket)
 		{
 			// connect to the server with clientSocket
@@ -811,8 +777,8 @@ static void clientWaiting(PVOID pvoid)
 
 	while (waiting)
 	{
-		char buf[MAX_LINE] = "\0";
-		char recvBuffer[MAX_LINE] = "\0";
+		char buf[MAX_LINE] = {0};
+		char recvBuffer[MAX_LINE] = {0};
 
 		// check for incoming message
 		int bytesReceived = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
