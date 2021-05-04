@@ -1,3 +1,5 @@
+//TODO client does not recover if server disconnects and reconnects
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -15,7 +17,6 @@ static HWND listboxHwnd;
 static HWND textboxHwnd;
 static WNDPROC originalListboxProc;
 static WNDPROC originalTextProc;
-static SOCKADDR_IN serverAddr;
 static SOCKET listenSocket;
 static SOCKET serverSocket;
 static SOCKET clientSocket;
@@ -54,7 +55,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v0.8",
+		"ShakyChat v0.9",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -481,15 +482,20 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	writeFile(LOG_FILE, "Starting as client");
 	state.isServer = false;
 	char commandLine[MAX_LINE];
-	wcstombs(commandLine, lpCmdLine, MAX_LINE);
-	char buf[MAX_LINE];
-	sprintf(buf, "Command line: %s", commandLine);
-	writeFile(LOG_FILE, buf);
+	wcstombs(commandLine, lpCmdLine, MAX_LINE); // convert LPWSTR to char *
+	char logMessage[MAX_LINE];
+	sprintf(logMessage, "Command line: %s", commandLine);
+	writeFile(LOG_FILE, logMessage);
 
 	// get ip address
 	int i = 0;
 	while (commandLine[i] != ' ')
 	{
+		if (!isdigit(commandLine[i]) && commandLine[i] != '.')
+		{
+			writeFile(LOG_FILE, "ERROR invalid digit found in IP address");
+			shutDown();
+		}
 		state.ip[i] = commandLine[i];
 		++i;
 	}
@@ -499,33 +505,41 @@ static void parseCommandLine(LPWSTR lpCmdLine)
 	char portText[MAX_LINE] = {0};
 	int p = 0;
 	while (commandLine[i] != '\0')
+	{
+		if (!isdigit(commandLine[i]))
+		{
+			writeFile(LOG_FILE, "ERROR invalid digit found in port number");
+			shutDown();
+		}
 		portText[p++] = commandLine[i++];
+	}
 	state.port = (u_short)atoi(portText);
 
-	sprintf(buf, "Command line IP: %s\nCommand line Port: %d", state.ip, state.port);
-	writeFile(LOG_FILE, buf);
+	sprintf(logMessage, "Command line IP: %s\nCommand line Port: %d", state.ip, state.port);
+	writeFile(LOG_FILE, logMessage);
 }
 
 static void getWSAErrorText(char *text, int code)
 {
-	char buf[256] = "\0";
-	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,	// flags
-				NULL,															// lpsource
-				code,															// message id
-				MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),						// languageid
-				buf,															// output buffer
-				sizeof(buf),													// size of msgbuf, bytes
-				NULL);															// va_list of arguments
+	char buffer[256] = {0};
+	FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, // flags
+				   NULL,													   // lpsource
+				   code,													   // logMessage id
+				   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),				   // languageid
+				   buffer,													   // output buffer
+				   sizeof(buffer),											   // size of msgbuf, bytes
+				   NULL);													   // va_list of arguments
 
-	if (! *buf)
-		sprintf(buf, "%d", code); // provide error # if no string available
+	if (!*buffer)
+		// sprintf(buffer, "%d", code); // provide error # if no string available
+		_itoa(code, buffer, 10);
 
-	strcpy(text, buf);
+	strcpy(text, buffer);
 }
 
 static void serverConfig(PVOID pvoid)
 {
-	char buf[MAX_LINE];
+	char logMessage[MAX_LINE];
 	char errorMsg[256];
 	WSADATA wsa;
 
@@ -533,55 +547,58 @@ static void serverConfig(PVOID pvoid)
 	if (WSAStartup(MAKEWORD(2,2), &wsa) != 0)
 	{
 		getWSAErrorText(errorMsg, WSAGetLastError());
-		sprintf(buf, "serverConfig: WSAStartup failed with error %s", errorMsg);
-		writeFile(LOG_FILE, buf);
+		sprintf(logMessage, "serverConfig: ERROR WSAStartup failed with error %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
 		return;
 	}
-	sprintf(buf, "serverConfig: Winsock DLL found.\nServer: Current status is: %s", wsa.szSystemStatus);
-	writeFile(LOG_FILE, buf);
+	sprintf(logMessage, "serverConfig: Winsock DLL found.\nServer: Current status is: %s", wsa.szSystemStatus);
+	writeFile(LOG_FILE, logMessage);
 
 	if (LOBYTE(wsa.wVersion) != 2 || HIBYTE(wsa.wVersion) != 2)
 	{
-		sprintf(buf, "serverConfig: DLL does not support Winsock version %u.%u!", LOBYTE(wsa.wVersion), HIBYTE(wsa.wVersion));
-		writeFile(LOG_FILE, buf);
+		sprintf(logMessage, "serverConfig: ERROR DLL does not support Winsock version %u.%u!", LOBYTE(wsa.wVersion), HIBYTE(wsa.wVersion));
+		writeFile(LOG_FILE, logMessage);
 		WSACleanup();
 		return;
 	}
-	sprintf(buf, "serverConfig: DLL supports Winsock version %u.%u", LOBYTE(wsa.wVersion), HIBYTE(wsa.wVersion));
-	writeFile(LOG_FILE, buf);
-	sprintf(buf, "serverConfig: DLL supports highest version %u.%u", LOBYTE(wsa.wHighVersion), HIBYTE(wsa.wHighVersion));
-	writeFile(LOG_FILE, buf);
+
+	sprintf(logMessage, "serverConfig: DLL supports Winsock version %u.%u", LOBYTE(wsa.wVersion), HIBYTE(wsa.wVersion));
+	writeFile(LOG_FILE, logMessage);
+	sprintf(logMessage, "serverConfig: DLL supports highest version %u.%u", LOBYTE(wsa.wHighVersion), HIBYTE(wsa.wHighVersion));
+	writeFile(LOG_FILE, logMessage);
 
 	// create a new socket to listen for client connections
 	listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
 	if (listenSocket == INVALID_SOCKET)
 	{
 		getWSAErrorText(errorMsg, WSAGetLastError());
-		sprintf(buf, "serverConfig: socket() failed with error %s", errorMsg);
-		writeFile(LOG_FILE, buf);
+		sprintf(logMessage, "serverConfig: ERROR socket() failed with error %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
 		WSACleanup();
 		return;
 	}
-	writeFile(LOG_FILE, "serverConfig: socket()");
+
+	writeFile(LOG_FILE, "serverConfig: socket() completed");
 
 	// configure SOCKADDR_IN structure to tell bind to listen for connections on all interfaces using port 5150
-	serverAddr.sin_family = AF_INET; // ipv4
-	serverAddr.sin_port = htons(state.port); // host to network byte order
-	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	SOCKADDR_IN serverAddress;
+	serverAddress.sin_family = AF_INET;		 // ipv4
+	serverAddress.sin_port = htons(state.port); // host to network byte order
+	serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	// associate the address information with the socket using bind
-	// call the bind function, passing the created socket and sockaddr_in struct as parameters
-	if (bind(listenSocket, (SOCKADDR *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
+	// call the bind function, passing the created socket and sockaddr_in struct
+	if (bind(listenSocket, (SOCKADDR *)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR)
 	{
 		getWSAErrorText(errorMsg, WSAGetLastError());
-		sprintf(buf, "serverConfig: bind() failed with error %s", errorMsg);
-		writeFile(LOG_FILE, buf);
+		sprintf(logMessage, "serverConfig: ERROR bind() failed with error %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
 		closesocket(listenSocket);
 		WSACleanup();
 		return;
 	}
-	writeFile(LOG_FILE, "serverConfig: bind()");
+
+	writeFile(LOG_FILE, "serverConfig: bind() completed");
 
 	serverSocket = (SOCKET)SOCKET_ERROR;
 	while (state.serverListening)
@@ -590,24 +607,33 @@ static void serverConfig(PVOID pvoid)
 		if (listen(listenSocket, 5) == SOCKET_ERROR)
 		{
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "serverConfig: listen() failed with error %s", errorMsg);
-			writeFile(LOG_FILE, buf);
+			sprintf(logMessage, "serverConfig: ERROR listen() failed with error %s", errorMsg);
+			writeFile(LOG_FILE, logMessage);
 			closesocket(listenSocket);
 			WSACleanup();
 			return;
 		}
-		// writeFile(LOG_FILE, "serverConfig: listen()");
+
+		// writeFile(LOG_FILE, "serverConfig: listen() completed");
 
 		// accept a new connection when available
 		while (serverSocket == SOCKET_ERROR)
 		{
 			// accept connection on listenSocket and assign it to serverSocket
 			// let listenSocket keep listening for more connections
-			writeFile(LOG_FILE, "serverConfig: accept()");
+			writeFile(LOG_FILE, "serverConfig: accept() listenSocket");
 			serverSocket = accept(listenSocket, NULL, NULL);
-			writeFile(LOG_FILE, "serverConfig: accept() ok");
+			writeFile(LOG_FILE, "serverConfig: accept() listenSocket ok");
 			state.serverConnected = true;
+
+			writeFile(LOG_FILE, "serverWaiting: new client connected");
+			char text[MAX_LINE] = "#Client connected!";
+			addNewText(text, strlen(text));
 		}
+
+		// in case shutdown started while listening got a new connection
+		if (!state.serverListening)
+			return;
 
 		if (!state.serverWaitingThreadStarted)
 		{
@@ -624,25 +650,24 @@ static void serverWaiting(PVOID pvoid)
 
 	while (waiting && state.serverConnected)
 	{
-		char buf[MAX_LINE] = {0};
-		char recvBuffer[MAX_LINE] = {0};
+		char logMessage[MAX_LINE] = {0};
+		char buffer[MAX_LINE] = {0};
 
 		// check for incoming message
-		int bytesReceived = recv(serverSocket, recvBuffer, sizeof(recvBuffer), 0);
+		int bytesReceived = recv(serverSocket, buffer, sizeof(buffer), 0);
 
-		if (bytesReceived > 0)
+		if (bytesReceived > 0) // data
 		{
-			writeFile(LOG_FILE, "serverWaiting: recv()");
-			writeFile(LOG_FILE, "serverWaiting: new client connected");
+			writeFile(LOG_FILE, "serverWaiting: recv() completed");
 
 			// print received bytes. note that this is the total bytes received, not the size of the declared buffer
-			sprintf(buf, "serverWaiting: bytes received: %d", bytesReceived);
-			writeFile(LOG_FILE, buf);
-			writeFile(LOG_FILE, recvBuffer);
+			sprintf(logMessage, "serverWaiting: bytes received: %d", bytesReceived);
+			writeFile(LOG_FILE, logMessage);
+			writeFile(LOG_FILE, buffer);
 
 			// add new text
 			char text[MAX_LINE] = "> ";
-			strcat(text, recvBuffer);
+			strcat(text, buffer);
 			clearNewlines(text, MAX_LINE);
 			addNewText(text, strlen(text));
 
@@ -651,7 +676,17 @@ static void serverWaiting(PVOID pvoid)
 			SetWindowPos(mainHwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 		}
 
-		if (bytesReceived < 0)
+		if (bytesReceived == 0) // disconnection
+		{
+			char text[MAX_LINE] = "#Connection error!";
+			addNewText(text, strlen(text));
+
+			serverSocket = (SOCKET)SOCKET_ERROR;
+			waiting = false;
+			state.serverWaitingThreadStarted = false;
+		}
+
+		if (bytesReceived < 0) // error
 		{
 			if (WSAGetLastError() == 10054)
 			{
@@ -659,8 +694,8 @@ static void serverWaiting(PVOID pvoid)
 				addNewText(text, strlen(text));
 			}
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "serverWaiting: recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
-			writeFile(LOG_FILE, buf);
+			sprintf(logMessage, "serverWaiting: ERROR recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
+			writeFile(LOG_FILE, logMessage);
 			serverSocket = (SOCKET)SOCKET_ERROR;
 			waiting = false;
 			state.serverWaitingThreadStarted = false;
@@ -670,55 +705,73 @@ static void serverWaiting(PVOID pvoid)
 
 static void serverShutdown()
 {
-	char buf[MAX_LINE];
+	char logMessage[MAX_LINE];
 	char errorMsg[256];
 
 	if (serverSocket != SOCKET_ERROR)
 	{
-		// clean up all send/receive comms, ready for new one
 		if (shutdown(serverSocket, SD_SEND) != 0)
 		{
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "serverShutdown: shutdown() failed, error: %s", errorMsg);
-			writeFile(LOG_FILE, buf);
+			sprintf(logMessage, "serverShutdown: ERROR shutdown() failed, error: %s", errorMsg);
+			writeFile(LOG_FILE, logMessage);
 		}
 		else
-			writeFile(LOG_FILE, "serverShutdown: shutdown()");
+			writeFile(LOG_FILE, "serverShutdown: shutdown() completed");
 	}
 
-	// when all data comms and listening are finished close the socket
 	if (closesocket(listenSocket) != 0)
 	{
 		getWSAErrorText(errorMsg, WSAGetLastError());
-		sprintf(buf, "serverShutdown: can't close listenSocket, error: %s", errorMsg);
-		writeFile(LOG_FILE, buf);
+		sprintf(logMessage, "serverShutdown: ERROR can't close listenSocket, error: %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
 	}
 	else
-		writeFile(LOG_FILE, "serverShutdown: closing listenSocket");
+		writeFile(LOG_FILE, "serverShutdown: closing listenSocket completed");
 
-	// clean up
 	if (WSACleanup() != 0)
 	{
 		getWSAErrorText(errorMsg, WSAGetLastError());
-		sprintf(buf, "serverShutdown: WSACleanup() failed, error: %s", errorMsg);
-		writeFile(LOG_FILE, buf);
+		sprintf(logMessage, "serverShutdown: ERROR WSACleanup() failed, error: %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
 	}
 	else
-		writeFile(LOG_FILE, "serverShutdown: WSACleanup()");
+		writeFile(LOG_FILE, "serverShutdown: WSACleanup() completed");
 }
 
 static void clientConfig(PVOID pvoid)
 {
-	char buf[MAX_LINE];
+	char logMessage[MAX_LINE];
 	char errorMsg[256];
 	WSADATA wsa;
 
 	// initialize winsock v2.2
-	WSAStartup(MAKEWORD(2,2), &wsa);
-	sprintf(buf, "clientConfig: Winsock DLL status is %s", wsa.szSystemStatus);
-	writeFile(LOG_FILE, buf);
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	{
+		getWSAErrorText(errorMsg, WSAGetLastError());
+		sprintf(logMessage, "clientConfig: ERROR WSAStartup failed with error %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
+		return;
+	}
+
+	sprintf(logMessage, "clientConfig: Winsock DLL found.\nClient: Current status is: %s", wsa.szSystemStatus);
+	writeFile(LOG_FILE, logMessage);
+
+	if (LOBYTE(wsa.wVersion) != 2 || HIBYTE(wsa.wVersion) != 2)
+	{
+		sprintf(logMessage, "clientConfig: ERROR DLL does not support Winsock version %u.%u!", LOBYTE(wsa.wVersion), HIBYTE(wsa.wVersion));
+		writeFile(LOG_FILE, logMessage);
+		WSACleanup();
+		return;
+	}
+
+	sprintf(logMessage, "clientConfig: DLL supports Winsock version %u.%u", LOBYTE(wsa.wVersion), HIBYTE(wsa.wVersion));
+	writeFile(LOG_FILE, logMessage);
+	sprintf(logMessage, "clientConfig: DLL supports highest version %u.%u", LOBYTE(wsa.wHighVersion), HIBYTE(wsa.wHighVersion));
+	writeFile(LOG_FILE, logMessage);
 
 	clientSocket = (SOCKET)SOCKET_ERROR;
+	SOCKADDR_IN serverAddress;
 
 	while (state.clientTalking)
 	{
@@ -729,40 +782,48 @@ static void clientConfig(PVOID pvoid)
 			if (clientSocket == INVALID_SOCKET)
 			{
 				getWSAErrorText(errorMsg, WSAGetLastError());
-				sprintf(buf, "clientConfig: socket() failed, error: %s", errorMsg);
-				writeFile(LOG_FILE, buf);
+				sprintf(logMessage, "clientConfig: ERROR socket() failed, error: %s", errorMsg);
+				writeFile(LOG_FILE, logMessage);
+				Sleep(2000);
 			}
+			else
+			{
+				writeFile(LOG_FILE, "clientConfig: socket() completed");
 
-			// create SOCKADDR_IN struct to connect to a listening server
-			serverAddr.sin_family = AF_INET;
-			serverAddr.sin_port = htons(state.port);
-			serverAddr.sin_addr.s_addr = inet_addr(state.ip);
+				// create SOCKADDR_IN struct to connect to a listening server
+				serverAddress.sin_family = AF_INET;
+				serverAddress.sin_port = htons(state.port);
+				serverAddress.sin_addr.s_addr = inet_addr(state.ip);
+				writeFile(LOG_FILE, "startClient: inet_addr() completed");
+			}
 		}
 
 		while (!state.clientConnected && clientSocket)
 		{
 			// connect to the server with clientSocket
-			if (connect(clientSocket, (SOCKADDR *)&serverAddr, sizeof(serverAddr)) != 0)
+			if (connect(clientSocket, (SOCKADDR *)&serverAddress, sizeof(serverAddress)) != 0)
 			{
+				//TODO failure here could be due to incorrect ip/port, should handle this
 				getWSAErrorText(errorMsg, WSAGetLastError());
-				sprintf(buf, "clientConfig: connect() failed, error: %s", errorMsg);
-				writeFile(LOG_FILE, buf);
+				sprintf(logMessage, "clientConfig: ERROR connect() failed, error: %s", errorMsg);
+				writeFile(LOG_FILE, logMessage);
 				Sleep(2000);
 			}
 			else
+			{
 				state.clientConnected = true;
+				writeFile(LOG_FILE, "clientConfig: connect() completed");
+			}
 		}
 
 		if (!state.clientWaitingThreadStarted)
 		{
-			// info on receiver side
-			int len = sizeof(serverAddr);
-			getsockname(clientSocket, (SOCKADDR *)&serverAddr, &len);
+			int len = sizeof(serverAddress);
+			getsockname(clientSocket, (SOCKADDR *)&serverAddress, &len);
 
-			sprintf(buf, "clientConfig: connected to IP: %s", inet_ntoa(serverAddr.sin_addr));
-			writeFile(LOG_FILE, buf);
-			sprintf(buf, "clientConfig: connected to port: %d", htons(serverAddr.sin_port));
-			writeFile(LOG_FILE, buf);
+			writeFile(LOG_FILE, "clientConfig: getsockname() completed");
+			sprintf(logMessage, "clientConfig: connected to IP: %s, port: %d", inet_ntoa(serverAddress.sin_addr), htons(serverAddress.sin_port));
+			writeFile(LOG_FILE, logMessage);
 
 			state.clientWaitingThreadStarted = true;
 			_beginthread(clientWaiting, 0, NULL);
@@ -772,27 +833,27 @@ static void clientConfig(PVOID pvoid)
 
 static void clientWaiting(PVOID pvoid)
 {
-	char errorMsg[256];
 	bool waiting = true;
 
 	while (waiting)
 	{
-		char buf[MAX_LINE] = {0};
-		char recvBuffer[MAX_LINE] = {0};
+		char errorMsg[256];
+		char buffer[MAX_LINE] = {0};
+		char logMessage[MAX_LINE] = {0};
 
 		// check for incoming message
-		int bytesReceived = recv(clientSocket, recvBuffer, sizeof(recvBuffer), 0);
+		int bytesReceived = recv(clientSocket, buffer, MAX_LINE, 0);
 
-		if (bytesReceived > 0)
+		if (bytesReceived > 0) // data
 		{
-			writeFile(LOG_FILE, "clientWaiting: recv()");
-			sprintf(buf, "clientWaiting: bytes received: %d", bytesReceived);
-			writeFile(LOG_FILE, buf);
-			writeFile(LOG_FILE, recvBuffer);
+			writeFile(LOG_FILE, "clientWaiting: recv() completed");
+			sprintf(logMessage, "clientWaiting: bytes received: %d", bytesReceived);
+			writeFile(LOG_FILE, logMessage);
+			writeFile(LOG_FILE, buffer);
 
 			// add new text
 			char text[MAX_LINE] = "> ";
-			strcat(text, recvBuffer);
+			strcat(text, buffer);
 			clearNewlines(text, MAX_LINE);
 			addNewText(text, strlen(text));
 
@@ -801,55 +862,68 @@ static void clientWaiting(PVOID pvoid)
 			SetWindowPos(mainHwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 		}
 
-		if (bytesReceived < 0)
+		if (bytesReceived == 0) // disconnection
+		{
+			char text[MAX_LINE] = "#Server has disconnected!";
+			addNewText(text, strlen(text));
+
+			writeFile(LOG_FILE, "clientWaiting: ERROR potential disconnection");
+			clientSocket = (SOCKET)SOCKET_ERROR;
+			state.clientWaitingThreadStarted = false;
+			state.clientConnected = false;
+		}
+
+		if (bytesReceived < 0) // error
 		{
 			if (WSAGetLastError() == 10053)
 			{
-				char text[MAX_LINE] = "#Server has disconnected!";
+				char text[MAX_LINE] = "#Connection error!";
 				addNewText(text, strlen(text));
 			}
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "clientWaiting: recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
-			writeFile(LOG_FILE, buf);
+			sprintf(logMessage, "clientWaiting: ERROR recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
+			writeFile(LOG_FILE, logMessage);
 			clientSocket = (SOCKET)SOCKET_ERROR;
+			state.clientWaitingThreadStarted = false;
 			state.clientConnected = false;
 			waiting = false;
-			state.clientWaitingThreadStarted = false;
 		}
 	}
 }
 
 static void clientShutdown()
 {
+	char logMessage[MAX_LINE];
 	char errorMsg[256];
 
 	if (clientSocket != SOCKET_ERROR)
 	{
-		char buf[MAX_LINE];
-
 		// clean up all send/receive comms, ready for new one
 		if (state.clientConnected && shutdown(clientSocket, SD_BOTH) != 0)
 		{
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "clientShutdown: shutdown() failed, error: %s", errorMsg);
-			writeFile(LOG_FILE, buf);
+			sprintf(logMessage, "clientShutdown: ERROR shutdown() failed, error: %s", errorMsg);
+			writeFile(LOG_FILE, logMessage);
 		}
 		else
-			writeFile(LOG_FILE, "clientShutdown: shutdown()");
+			writeFile(LOG_FILE, "clientShutdown: shutdown() completed");
 
 		// close socket
 		if (closesocket(clientSocket) != 0)
 		{
 			getWSAErrorText(errorMsg, WSAGetLastError());
-			sprintf(buf, "clientShutdown: can't close clientSocket, error: %s", errorMsg);
-			writeFile(LOG_FILE, buf);
+			sprintf(logMessage, "clientShutdown: ERROR can't close clientSocket, error: %s", errorMsg);
+			writeFile(LOG_FILE, logMessage);
 		}
 		else
-			writeFile(LOG_FILE, "clientShutdown: closing clientSocket...");
+			writeFile(LOG_FILE, "clientShutdown: closing clientSocket completed");
 	}
 
 	if (WSACleanup() != 0)
-		writeFile(LOG_FILE, "clientShutdown: WSACleanup() failed!");
+	{
+		sprintf(logMessage, "clientShutdown: ERROR WSACleanup() failed, error %s", errorMsg);
+		writeFile(LOG_FILE, logMessage);
+	}
 	else
-		writeFile(LOG_FILE, "clientShutdown: WSACleanup()");
+		writeFile(LOG_FILE, "clientShutdown: WSACleanup() completed");
 }
