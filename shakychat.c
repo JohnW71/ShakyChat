@@ -1,5 +1,3 @@
-//TODO client does not recover if server disconnects and reconnects
-
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 
@@ -327,8 +325,8 @@ static void writeFile(char *filename, char *text)
 {
 	while(state.writing)
 	{
-		char t[MAX_LINE] = "#Writing blocked";
-		addNewText(t, strlen(t));
+		// char t[MAX_LINE] = "#Writing blocked";
+		// addNewText(t, strlen(t));
 		Sleep(100);
 	}
 
@@ -794,11 +792,11 @@ static void clientConfig(PVOID pvoid)
 				serverAddress.sin_family = AF_INET;
 				serverAddress.sin_port = htons(state.port);
 				serverAddress.sin_addr.s_addr = inet_addr(state.ip);
-				writeFile(LOG_FILE, "startClient: inet_addr() completed");
+				writeFile(LOG_FILE, "clientConfig: inet_addr() completed");
 			}
 		}
 
-		while (!state.clientConnected && clientSocket)
+		while (!state.clientConnected && clientSocket != (SOCKET)SOCKET_ERROR)
 		{
 			// connect to the server with clientSocket
 			if (connect(clientSocket, (SOCKADDR *)&serverAddress, sizeof(serverAddress)) != 0)
@@ -816,7 +814,7 @@ static void clientConfig(PVOID pvoid)
 			}
 		}
 
-		if (!state.clientWaitingThreadStarted)
+		if (!state.clientWaitingThreadStarted && state.clientConnected)
 		{
 			int len = sizeof(serverAddress);
 			getsockname(clientSocket, (SOCKADDR *)&serverAddress, &len);
@@ -824,6 +822,9 @@ static void clientConfig(PVOID pvoid)
 			writeFile(LOG_FILE, "clientConfig: getsockname() completed");
 			sprintf(logMessage, "clientConfig: connected to IP: %s, port: %d", inet_ntoa(serverAddress.sin_addr), htons(serverAddress.sin_port));
 			writeFile(LOG_FILE, logMessage);
+
+			char text[MAX_LINE] = "#Server connected!";
+			addNewText(text, strlen(text));
 
 			state.clientWaitingThreadStarted = true;
 			_beginthread(clientWaiting, 0, NULL);
@@ -833,9 +834,7 @@ static void clientConfig(PVOID pvoid)
 
 static void clientWaiting(PVOID pvoid)
 {
-	bool waiting = true;
-
-	while (waiting)
+	while (state.clientConnected)
 	{
 		char errorMsg[256];
 		char buffer[MAX_LINE] = {0};
@@ -886,7 +885,6 @@ static void clientWaiting(PVOID pvoid)
 			clientSocket = (SOCKET)SOCKET_ERROR;
 			state.clientWaitingThreadStarted = false;
 			state.clientConnected = false;
-			waiting = false;
 		}
 	}
 }
