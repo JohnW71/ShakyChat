@@ -45,6 +45,7 @@ static void clientShutdown();
 static void getWSAErrorText(char *, int);
 static void addNewText(char *, size_t);
 static void shutDown(void);
+static void flashWindow(void);
 
 LRESULT CALLBACK mainWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK customListboxProc(HWND, UINT, WPARAM, LPARAM);

@@ -19,6 +19,9 @@ static SOCKET listenSocket;
 static SOCKET serverSocket;
 static SOCKET clientSocket;
 
+// no command line to start as server
+// add 192.168.1.3 5150 to client command line
+
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 					_In_ LPWSTR lpCmdLine, _In_ int nShowCmd)
 {
@@ -53,7 +56,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 
 	mainHwnd = CreateWindowEx(WS_EX_LEFT,
 		wc.lpszClassName,
-		"ShakyChat v1.0",
+		"ShakyChat v1.1",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, CW_USEDEFAULT, WINDOW_WIDTH, WINDOW_HEIGHT,
 		NULL, NULL, hInstance, NULL);
@@ -205,11 +208,12 @@ LRESULT CALLBACK customTextProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 					shutDown();
 					break;
 				case VK_RETURN:
-					char errorMsg[256];
 					char text[MAX_LINE];
+
 					GetWindowText(hwnd, text, MAX_LINE);
 					if (strlen(text) > 0)
 					{
+						char errorMsg[256];
 						clearNewlines(text, MAX_LINE);
 						addNewText(text, strlen(text));
 
@@ -672,6 +676,7 @@ static void serverWaiting(PVOID pvoid)
 			// bring window to front, first line only would be permanently in front
 			SetWindowPos(mainHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 			SetWindowPos(mainHwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+			FlashWindow(mainHwnd, true);
 		}
 
 		if (bytesReceived == 0) // disconnection
@@ -836,7 +841,6 @@ static void clientWaiting(PVOID pvoid)
 {
 	while (state.clientConnected)
 	{
-		char errorMsg[256];
 		char buffer[MAX_LINE] = {0};
 		char logMessage[MAX_LINE] = {0};
 
@@ -859,6 +863,7 @@ static void clientWaiting(PVOID pvoid)
 			// bring window to front, first line only would be permanently in front
 			SetWindowPos(mainHwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 			SetWindowPos(mainHwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+			FlashWindow(mainHwnd, true);
 		}
 
 		if (bytesReceived == 0) // disconnection
@@ -879,6 +884,7 @@ static void clientWaiting(PVOID pvoid)
 				char text[MAX_LINE] = "#Connection error!";
 				addNewText(text, strlen(text));
 			}
+			char errorMsg[256];
 			getWSAErrorText(errorMsg, WSAGetLastError());
 			sprintf(logMessage, "clientWaiting: ERROR recv() failed, error: %ld %s", WSAGetLastError(), errorMsg);
 			writeFile(LOG_FILE, logMessage);
@@ -924,4 +930,16 @@ static void clientShutdown()
 	}
 	else
 		writeFile(LOG_FILE, "clientShutdown: WSACleanup() completed");
+}
+
+static void flashWindow()
+{
+	FLASHWINFO flashInfo = {0};
+	flashInfo.cbSize = sizeof(FLASHWINFO);
+	flashInfo.hwnd = mainHwnd;
+	flashInfo.dwFlags = FLASHW_TRAY|FLASHW_TIMERNOFG;
+	flashInfo.uCount = 0;
+	flashInfo.dwTimeout = 0;
+
+	FlashWindowEx(&flashInfo);
 }
